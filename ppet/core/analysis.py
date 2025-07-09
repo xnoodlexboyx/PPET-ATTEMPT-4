@@ -1,221 +1,276 @@
+"""PUF analysis and visualization module with military-grade capabilities."""
+
 import numpy as np
-from typing import Dict, List, Optional, Tuple
-from scipy.stats import entropy
 import matplotlib.pyplot as plt
 import seaborn as sns
+from typing import List, Dict, Optional, Tuple, Union
+from .puf_emulator import PUF
+from .military_stressors import MilitaryEnvironment, MilitaryStressors
 
 class PUFAnalyzer:
-    """Analyzer for PUF characteristics and metrics."""
-    
-    def __init__(self):
-        """Initialize PUF analyzer."""
-        self.metrics = {}
-        self.challenge_length = None
-        self.num_instances = None
-    
-    def analyze_uniqueness(
+    def __init__(self, puf: PUF):
+        """Initialize PUF analyzer.
+        
+        Args:
+            puf: PUF instance to analyze
+        """
+        self.puf = puf
+        
+    def analyze_reliability_under_stress(
         self,
-        responses: np.ndarray,
-        challenges: Optional[np.ndarray] = None
-    ) -> float:
-        """Calculate inter-chip hamming distance (uniqueness).
+        challenge: np.ndarray,
+        num_trials: int = 100,
+        time_points: Optional[List[float]] = None
+    ) -> Dict[str, np.ndarray]:
+        """Analyze PUF reliability under military environmental stress.
         
         Args:
-            responses: Response matrix (num_instances x num_challenges)
-            challenges: Optional challenge matrix for correlation analysis
-        
+            challenge: Challenge bits to evaluate
+            num_trials: Number of trials per time point
+            time_points: List of mission times to evaluate (hours)
+            
         Returns:
-            Average inter-chip hamming distance percentage
+            Dictionary containing reliability metrics
         """
-        num_instances, num_challenges = responses.shape
-        total_comparisons = 0
-        total_hd = 0
+        if time_points is None:
+            time_points = np.linspace(0, 1000, 20)  # Default 1000-hour mission
+            
+        responses = []
+        temperatures = []
+        emi_levels = []
+        aging_factors = []
         
-        # Compare each pair of instances
-        for i in range(num_instances):
-            for j in range(i + 1, num_instances):
-                hd = np.sum(responses[i] != responses[j])
-                total_hd += hd
-                total_comparisons += num_challenges
+        base_response = self.puf.evaluate(challenge)
         
-        uniqueness = (total_hd / total_comparisons) * 100
-        self.metrics['uniqueness'] = uniqueness
-        
-        if challenges is not None:
-            # Analyze response correlation with challenges
-            challenge_correlation = np.corrcoef(challenges.T, responses.T)
-            self.metrics['challenge_correlation'] = challenge_correlation
-        
-        return uniqueness
-    
-    def analyze_reliability(
-        self,
-        responses: np.ndarray,
-        noise_responses: np.ndarray
-    ) -> float:
-        """Calculate bit error rate under noise (reliability).
-        
-        Args:
-            responses: Original response matrix (num_instances x num_challenges)
-            noise_responses: Noisy response matrix
-        
-        Returns:
-            Average bit error rate percentage
-        """
-        if responses.shape != noise_responses.shape:
-            raise ValueError("Response matrices must have same shape")
-        
-        # Calculate bit errors
-        bit_errors = np.sum(responses != noise_responses, axis=1)
-        total_bits = responses.shape[1]
-        
-        # Calculate BER for each instance
-        ber = (bit_errors / total_bits) * 100
-        avg_ber = np.mean(ber)
-        std_ber = np.std(ber)
-        
-        self.metrics['reliability'] = 100 - avg_ber
-        self.metrics['reliability_std'] = std_ber
-        
-        return 100 - avg_ber  # Convert to reliability percentage
-    
-    def analyze_bit_aliasing(self, responses: np.ndarray) -> float:
-        """Calculate bit aliasing across PUF instances.
-        
-        Args:
-            responses: Response matrix (num_instances x num_challenges)
-        
-        Returns:
-            Average bit aliasing percentage
-        """
-        num_instances = responses.shape[0]
-        
-        # Calculate probability of 1s for each challenge
-        prob_ones = np.mean(responses, axis=0)
-        
-        # Calculate bit aliasing (deviation from ideal 50%)
-        bit_aliasing = float(np.mean(np.abs(prob_ones - 0.5)) * 100)
-        
-        self.metrics['bit_aliasing'] = bit_aliasing
-        self.metrics['bit_bias'] = float(np.mean(prob_ones))
-        
-        return bit_aliasing
-    
-    def analyze_entropy(self, responses: np.ndarray) -> float:
-        """Calculate response entropy.
-        
-        Args:
-            responses: Response matrix (num_instances x num_challenges)
-        
-        Returns:
-            Average response entropy (bits)
-        """
-        # Calculate response probabilities
-        response_counts = np.bincount(responses.flatten())
-        response_probs = response_counts / len(responses.flatten())
-        
-        # Calculate Shannon entropy
-        response_entropy = entropy(response_probs, base=2)
-        
-        self.metrics['entropy'] = response_entropy
-        return response_entropy
-    
-    def analyze_uniformity(self, responses: np.ndarray) -> float:
-        """Calculate response uniformity.
-        
-        Args:
-            responses: Response matrix (num_instances x num_challenges)
-        
-        Returns:
-            Uniformity percentage
-        """
-        # Calculate percentage of 1s
-        uniformity = np.mean(responses) * 100
-        
-        self.metrics['uniformity'] = uniformity
-        return uniformity
-    
-    def plot_metrics(
-        self,
-        save_path: Optional[str] = None,
-        show: bool = True
-    ) -> None:
-        """Plot PUF metrics visualization.
-        
-        Args:
-            save_path: Optional path to save the plot
-            show: Whether to display the plot
-        """
-        plt.figure(figsize=(12, 8))
-        
-        # Create bar plot of main metrics
-        metrics_to_plot = [
-            'uniqueness',
-            'reliability',
-            'bit_aliasing',
-            'uniformity'
-        ]
-        
-        values = [self.metrics.get(m, 0) for m in metrics_to_plot]
-        
-        plt.bar(metrics_to_plot, values)
-        plt.axhline(y=50, color='r', linestyle='--', label='Ideal')
-        
-        plt.title('PUF Quality Metrics')
-        plt.ylabel('Percentage (%)')
-        plt.ylim(0, 100)
-        
-        # Add value labels
-        for i, v in enumerate(values):
-            plt.text(i, v + 1, f'{v:.1f}%', ha='center')
-        
-        plt.legend()
-        
-        if save_path:
-            plt.savefig(save_path)
-        
-        if show:
-            plt.show()
-        else:
-            plt.close()
-    
-    def generate_report(self) -> Dict:
-        """Generate comprehensive analysis report.
-        
-        Returns:
-            Dictionary containing all metrics and analysis results
-        """
-        report = {
-            'summary': {
-                metric: f"{value:.2f}" if isinstance(value, float) else value
-                for metric, value in self.metrics.items()
-            },
-            'recommendations': []
+        for time in time_points:
+            self.puf.update_mission_time(time)
+            
+            trial_responses = []
+            for _ in range(num_trials):
+                response = self.puf.evaluate(challenge)
+                trial_responses.append(response)
+                
+            responses.append(trial_responses)
+            temperatures.append(self.puf.environmental_stressors['temperature'])
+            emi_levels.append(self.puf.environmental_stressors['em_noise'])
+            aging_factors.append(self.puf.environmental_stressors.get('aging_factor', 1.0))
+            
+        return {
+            'time_points': time_points,
+            'responses': np.array(responses),
+            'temperatures': np.array(temperatures),
+            'emi_levels': np.array(emi_levels),
+            'aging_factors': np.array(aging_factors),
+            'base_response': base_response
         }
         
-        # Add recommendations based on metrics
-        if self.metrics.get('uniqueness', 0) < 45:
-            report['recommendations'].append(
-                "Uniqueness below target (45-55%). Consider increasing "
-                "manufacturing variation parameters."
-            )
+    def plot_reliability_analysis(
+        self,
+        analysis_data: Dict[str, np.ndarray],
+        save_path: Optional[str] = None
+    ):
+        """Create comprehensive reliability visualization.
         
-        if self.metrics.get('reliability', 100) < 95:
-            report['recommendations'].append(
-                "Reliability below 95%. Consider reducing noise sensitivity "
-                "or environmental variation."
-            )
+        Args:
+            analysis_data: Data from analyze_reliability_under_stress
+            save_path: Optional path to save the plot
+        """
+        fig = plt.figure(figsize=(15, 10))
+        gs = plt.GridSpec(3, 2)
         
-        if self.metrics.get('bit_aliasing', 0) > 10:
-            report['recommendations'].append(
-                "High bit aliasing (>10%). Check for systematic bias in "
-                "the PUF design."
-            )
+        # Reliability over time
+        ax1 = fig.add_subplot(gs[0, :])
+        reliability = np.mean(analysis_data['responses'] == analysis_data['base_response'], axis=1)
+        ax1.plot(analysis_data['time_points'], reliability * 100, 'b-', label='Reliability')
+        ax1.set_xlabel('Mission Time (hours)')
+        ax1.set_ylabel('Reliability (%)')
+        ax1.set_title('PUF Reliability Over Mission Time')
+        ax1.grid(True)
         
-        if abs(self.metrics.get('uniformity', 50) - 50) > 5:
-            report['recommendations'].append(
-                "Response uniformity deviates >5% from ideal 50%. "
-                "Check for response bias."
-            )
+        # Temperature profile
+        ax2 = fig.add_subplot(gs[1, 0])
+        ax2.plot(analysis_data['time_points'], analysis_data['temperatures'], 'r-')
+        ax2.set_xlabel('Mission Time (hours)')
+        ax2.set_ylabel('Temperature (°C)')
+        ax2.set_title('Temperature Profile')
+        ax2.grid(True)
         
-        return report 
+        # EMI profile
+        ax3 = fig.add_subplot(gs[1, 1])
+        ax3.plot(analysis_data['time_points'], analysis_data['emi_levels'], 'g-')
+        ax3.set_xlabel('Mission Time (hours)')
+        ax3.set_ylabel('EMI Level (normalized)')
+        ax3.set_title('EMI Profile')
+        ax3.grid(True)
+        
+        # Response distribution
+        ax4 = fig.add_subplot(gs[2, 0])
+        flipped_bits = np.sum(analysis_data['responses'] != analysis_data['base_response'], axis=0)
+        sns.histplot(data=flipped_bits, ax=ax4, bins=20)
+        ax4.set_xlabel('Number of Bit Flips')
+        ax4.set_ylabel('Count')
+        ax4.set_title('Response Stability Distribution')
+        
+        # Aging effects
+        ax5 = fig.add_subplot(gs[2, 1])
+        ax5.plot(analysis_data['time_points'], analysis_data['aging_factors'], 'm-')
+        ax5.set_xlabel('Mission Time (hours)')
+        ax5.set_ylabel('Aging Factor')
+        ax5.set_title('Aging Degradation')
+        ax5.grid(True)
+        
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path)
+        plt.close()
+        
+    def analyze_environmental_sensitivity(
+        self,
+        challenge: np.ndarray,
+        environment: MilitaryEnvironment,
+        num_samples: int = 1000
+    ) -> Dict[str, np.ndarray]:
+        """Analyze PUF sensitivity to environmental conditions.
+        
+        Args:
+            challenge: Challenge bits to evaluate
+            environment: Military environment profile
+            num_samples: Number of samples to collect
+            
+        Returns:
+            Dictionary containing sensitivity metrics
+        """
+        stressor = MilitaryStressors(environment=environment)
+        base_response = self.puf.evaluate(challenge)
+        
+        times = np.random.uniform(0, 1000, num_samples)
+        responses = []
+        conditions = []
+        
+        for t in times:
+            stressors = stressor.get_all_stressors(t)
+            # Update PUF environmental conditions
+            self.puf.environmental_stressors.update({
+                'temperature': stressors['temperature'],
+                'em_noise': stressors['em_noise'],
+                'aging_factor': stressors['aging_factor']
+            })
+            response = self.puf.evaluate(challenge)
+            responses.append(response)
+            conditions.append(stressors)
+            
+        return {
+            'times': times,
+            'responses': np.array(responses),
+            'conditions': conditions,
+            'base_response': base_response
+        }
+        
+    def plot_environmental_sensitivity(
+        self,
+        sensitivity_data: Dict[str, np.ndarray],
+        save_path: Optional[str] = None
+    ):
+        """Create environmental sensitivity visualization.
+        
+        Args:
+            sensitivity_data: Data from analyze_environmental_sensitivity
+            save_path: Optional path to save the plot
+        """
+        responses = sensitivity_data['responses']
+        times = sensitivity_data['times']
+        conditions = sensitivity_data['conditions']
+        
+        # Extract condition data
+        temps = np.array([c['temperature'] for c in conditions])
+        emi = np.array([c['em_noise'] for c in conditions])
+        
+        # Create figure
+        fig = plt.figure(figsize=(15, 10))
+        
+        # 3D scatter plot of response changes
+        ax1 = fig.add_subplot(221, projection='3d')
+        sc = ax1.scatter(temps, emi, times, c=responses, cmap='coolwarm')
+        ax1.set_xlabel('Temperature (°C)')
+        ax1.set_ylabel('EMI Level')
+        ax1.set_zlabel('Mission Time (h)')
+        plt.colorbar(sc, label='Response')
+        
+        # Temperature sensitivity
+        ax2 = fig.add_subplot(222)
+        temp_bins = np.linspace(min(temps), max(temps), 20)
+        temp_responses = [np.mean(responses[np.digitize(temps, temp_bins) == i])
+                         for i in range(len(temp_bins))]
+        ax2.plot(temp_bins, temp_responses, 'b-')
+        ax2.set_xlabel('Temperature (°C)')
+        ax2.set_ylabel('Response Probability')
+        ax2.set_title('Temperature Sensitivity')
+        ax2.grid(True)
+        
+        # EMI sensitivity
+        ax3 = fig.add_subplot(223)
+        emi_bins = np.linspace(min(emi), max(emi), 20)
+        emi_responses = [np.mean(responses[np.digitize(emi, emi_bins) == i])
+                        for i in range(len(emi_bins))]
+        ax3.plot(emi_bins, emi_responses, 'r-')
+        ax3.set_xlabel('EMI Level')
+        ax3.set_ylabel('Response Probability')
+        ax3.set_title('EMI Sensitivity')
+        ax3.grid(True)
+        
+        # Time evolution
+        ax4 = fig.add_subplot(224)
+        time_bins = np.linspace(min(times), max(times), 20)
+        time_responses = [np.mean(responses[np.digitize(times, time_bins) == i])
+                         for i in range(len(time_bins))]
+        ax4.plot(time_bins, time_responses, 'g-')
+        ax4.set_xlabel('Mission Time (h)')
+        ax4.set_ylabel('Response Probability')
+        ax4.set_title('Time Evolution')
+        ax4.grid(True)
+        
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path)
+        plt.close()
+
+    def generate_reliability_report(
+        self,
+        challenge: np.ndarray,
+        environment: MilitaryEnvironment,
+        save_path: Optional[str] = None
+    ) -> Dict[str, float]:
+        """Generate comprehensive reliability report for military applications.
+        
+        Args:
+            challenge: Challenge bits to evaluate
+            environment: Military environment profile
+            save_path: Optional path to save visualizations
+            
+        Returns:
+            Dictionary containing reliability metrics
+        """
+        # Analyze reliability under stress
+        stress_data = self.analyze_reliability_under_stress(challenge)
+        reliability_data = self.analyze_environmental_sensitivity(challenge, environment)
+        
+        # Calculate metrics
+        mean_reliability = np.mean(stress_data['responses'] == stress_data['base_response']) * 100
+        worst_case_reliability = np.min(np.mean(stress_data['responses'] == stress_data['base_response'], axis=1)) * 100
+        temp_sensitivity = np.std([np.mean(stress_data['responses'][i] == stress_data['base_response'])
+                                 for i in range(len(stress_data['temperatures']))]) * 100
+        emi_sensitivity = np.std([np.mean(stress_data['responses'][i] == stress_data['base_response'])
+                                for i in range(len(stress_data['emi_levels']))]) * 100
+        
+        # Generate visualizations if save path provided
+        if save_path:
+            self.plot_reliability_analysis(stress_data, f"{save_path}_reliability.png")
+            self.plot_environmental_sensitivity(reliability_data, f"{save_path}_sensitivity.png")
+        
+        return {
+            'mean_reliability_percent': mean_reliability,
+            'worst_case_reliability_percent': worst_case_reliability,
+            'temperature_sensitivity_percent': temp_sensitivity,
+            'emi_sensitivity_percent': emi_sensitivity,
+            'aging_impact': np.mean(stress_data['aging_factors']) - 1.0
+        } 

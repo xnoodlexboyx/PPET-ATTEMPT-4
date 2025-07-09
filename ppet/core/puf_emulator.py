@@ -1,11 +1,14 @@
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Union
+from .military_stressors import MilitaryStressors, MilitaryEnvironment
 
 class PUF:
     def __init__(
         self,
         seed: Optional[int] = None,
-        environmental_stressors: Optional[Dict[str, float]] = None
+        environmental_stressors: Optional[Dict[str, float]] = None,
+        military_environment: Optional[MilitaryEnvironment] = None,
+        mission_time: float = 0.0
     ):
         """Initialize base PUF class.
         
@@ -13,15 +16,53 @@ class PUF:
             seed: Random seed for reproducibility
             environmental_stressors: Dictionary of environmental conditions
                 Example: {'temperature': 25.0, 'voltage': 1.2, 'em_noise': 0.0}
+            military_environment: Optional military environment profile
+            mission_time: Current mission time in hours (for military environments)
         """
         self.seed = seed
-        self.environmental_stressors = environmental_stressors or {
-            'temperature': 25.0,  # °C
-            'voltage': 1.2,      # V
-            'em_noise': 0.0      # normalized units
-        }
+        self.mission_time = mission_time
+        
+        # Initialize military stressor simulator if environment specified
+        self.military_stressors = None
+        if military_environment is not None:
+            self.military_stressors = MilitaryStressors(
+                environment=military_environment,
+                mission_duration=1000.0,  # Default 1000 hour mission
+                seed=seed
+            )
+            # Get initial stressor values
+            mil_stressors = self.military_stressors.get_all_stressors(mission_time)
+            self.environmental_stressors = {
+                'temperature': mil_stressors['temperature'],
+                'voltage': 1.2,  # Nominal voltage
+                'em_noise': mil_stressors['em_noise'],
+                'aging_factor': mil_stressors['aging_factor']
+            }
+        else:
+            self.environmental_stressors = environmental_stressors or {
+                'temperature': 25.0,  # °C
+                'voltage': 1.2,      # V
+                'em_noise': 0.0,     # normalized units
+                'aging_factor': 1.0  # no aging
+            }
+            
         if seed is not None:
             np.random.seed(seed)
+
+    def update_mission_time(self, time: float):
+        """Update mission time and environmental stressors.
+        
+        Args:
+            time: New mission time in hours
+        """
+        self.mission_time = time
+        if self.military_stressors is not None:
+            mil_stressors = self.military_stressors.get_all_stressors(time)
+            self.environmental_stressors.update({
+                'temperature': mil_stressors['temperature'],
+                'em_noise': mil_stressors['em_noise'],
+                'aging_factor': mil_stressors['aging_factor']
+            })
 
     def _apply_environmental_effects(self, value: float) -> float:
         """Apply environmental stressor effects to a value.
@@ -30,13 +71,23 @@ class PUF:
         - Temperature: Linear effect (±0.1% per °C from 25°C)
         - Voltage: Quadratic effect around nominal
         - EM noise: Additive Gaussian noise
+        - Aging: Multiplicative degradation
         """
+        # Temperature effect with wider range support
         temp_effect = 1.0 + 0.001 * (self.environmental_stressors['temperature'] - 25.0)
+        
+        # Voltage effect
         voltage_nominal = 1.2
         voltage_effect = 1.0 + 0.05 * ((self.environmental_stressors['voltage'] - voltage_nominal) / voltage_nominal) ** 2
+        
+        # Enhanced EM noise model
         em_noise = np.random.normal(0, self.environmental_stressors['em_noise'] * 0.05)
         
-        return value * temp_effect * voltage_effect + em_noise
+        # Apply aging degradation
+        aging_effect = self.environmental_stressors.get('aging_factor', 1.0)
+        
+        # Combine all effects
+        return (value * temp_effect * voltage_effect * aging_effect) + em_noise
 
     def generate_crps(self, num_crps: int) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
         """Generate challenge-response pairs."""

@@ -1,6 +1,6 @@
 # PPET User Guide
 
-This guide provides detailed instructions for using the Physical Unclonable Function Emulation and Analysis Tool (PPET).
+This guide provides detailed instructions for using the PUF Plotting & Evaluation Toolkit (PPET).
 
 ## Table of Contents
 
