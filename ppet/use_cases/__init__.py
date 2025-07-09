@@ -1,9 +1,9 @@
 """Use cases module containing defense-specific PUF applications."""
 
-from .secure_communication import SecureCommunicationUseCase
-from .drone_authentication import DroneAuthenticationUseCase
+from .secure_communication import SecureCommunicationProtocol
+from .drone_authentication import DroneAuthenticationProtocol
 
 __all__ = [
-    'SecureCommunicationUseCase',
-    'DroneAuthenticationUseCase'
+    'SecureCommunicationProtocol',
+    'DroneAuthenticationProtocol'
 ] 

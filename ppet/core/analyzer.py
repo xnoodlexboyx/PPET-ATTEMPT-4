@@ -1,53 +1,73 @@
 import numpy as np
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Optional
 from .puf_emulator import PUF
 from ..utilities.data_generators import DataGenerator
 
 class PUFAnalyzer:
-    def __init__(self, puf: PUF):
+    def __init__(self, puf: Optional[PUF] = None):
         """Initialize PUF analyzer.
         
         Args:
-            puf: PUF instance to analyze
+            puf: Optional PUF instance to analyze. If not provided, 
+                 some methods will require explicit data input.
         """
         self.puf = puf
-        self.data_generator = DataGenerator()
+        self.data_generator = DataGenerator() if puf is not None else None
         self.analysis_results = {}
 
     def analyze_uniqueness(
         self,
-        num_instances: int,
-        num_challenges: int,
-        puf_params: Dict
+        responses: Optional[np.ndarray] = None,
+        num_instances: Optional[int] = None,
+        num_challenges: Optional[int] = None,
+        puf_params: Optional[Dict] = None
     ) -> Dict:
         """Analyze inter-device uniqueness of PUF responses.
         
         Args:
-            num_instances: Number of PUF instances to compare
-            num_challenges: Number of challenges per instance
-            puf_params: Parameters for PUF initialization
+            responses: Pre-computed responses from multiple PUF instances (shape: [instances, challenges])
+                      OR None to generate new responses using the stored PUF
+            num_instances: Number of PUF instances to compare (required if responses=None)
+            num_challenges: Number of challenges per instance (required if responses=None)
+            puf_params: Parameters for PUF initialization (required if responses=None)
         
         Returns:
             Dictionary containing uniqueness metrics
         """
-        # Generate population of PUF instances
-        puf_type = self.puf.__class__.__name__.lower().replace('puf', '')
-        population = self.data_generator.generate_puf_population(
-            puf_type,
-            num_instances,
-            puf_params
-        )
-        
-        # Generate responses for each instance
-        responses = []
-        for puf_instance in population:
-            if hasattr(puf_instance, 'generate_crps'):
-                _, instance_responses = puf_instance.generate_crps(num_challenges)
-            else:
-                instance_responses = puf_instance.generate_crps(num_challenges)
-            responses.append(instance_responses)
-        
-        responses = np.array(responses)
+        # Handle both API styles: README style with direct responses, and detailed style
+        if responses is not None:
+            # README API style: direct responses provided
+            if len(responses.shape) != 2:
+                raise ValueError("Responses should be 2D array [instances, challenges]")
+            num_instances = responses.shape[0]
+            num_challenges = responses.shape[1]
+        else:
+            # Detailed API style: generate responses using PUF
+            if self.puf is None:
+                raise ValueError("PUF instance required when responses not provided")
+            if self.data_generator is None:
+                raise ValueError("DataGenerator not initialized")
+            if num_instances is None or num_challenges is None or puf_params is None:
+                raise ValueError("num_instances, num_challenges, and puf_params required when responses=None")
+            
+            # Generate population of PUF instances
+            puf_type = self.puf.__class__.__name__.lower().replace('puf', '')
+            population = self.data_generator.generate_puf_population(
+                puf_type,
+                num_instances,
+                puf_params
+            )
+            
+            # Generate responses for each instance
+            responses_list = []
+            for puf_instance in population:
+                if hasattr(puf_instance, 'generate_crps'):
+                    _, instance_responses = puf_instance.generate_crps(num_challenges)
+                else:
+                    instance_responses = puf_instance.generate_crps(num_challenges)
+                responses_list.append(instance_responses)
+            
+            responses = np.array(responses_list)
         
         # Calculate Hamming distances between all pairs
         n = len(responses)
@@ -78,63 +98,94 @@ class PUFAnalyzer:
 
     def analyze_reliability(
         self,
-        num_crps: int,
-        env_conditions: Dict[str, Dict]
+        responses: Optional[np.ndarray] = None,
+        noise_responses: Optional[np.ndarray] = None,
+        num_crps: Optional[int] = None,
+        env_conditions: Optional[Dict[str, Dict]] = None
     ) -> Dict:
         """Analyze reliability under environmental variations.
         
         Args:
-            num_crps: Number of CRPs to test
-            env_conditions: Environmental conditions to test
-                Example: {
-                    'temperature': {'min': -40, 'max': 85, 'points': 100},
-                    'voltage': {'nominal': 1.2, 'variation': 0.1, 'points': 50}
-                }
+            responses: Nominal PUF responses (README API style)
+            noise_responses: Noisy PUF responses (README API style)
+            num_crps: Number of CRPs to test (detailed API style)
+            env_conditions: Environmental conditions to test (detailed API style)
         
         Returns:
             Dictionary containing reliability metrics
         """
-        # Generate reliability dataset
-        nominal_responses, condition_responses, env_data = \
-            self.data_generator.generate_reliability_dataset(
-                self.puf,
-                num_crps,
-                env_conditions
-            )
-        
-        # Calculate reliability metrics for each condition
-        reliability_metrics = {}
-        
-        for condition, responses in condition_responses.items():
-            # Calculate bit error rate for each environmental value
-            bit_error_rates = []
-            for response in responses:
-                bit_errors = np.mean(response != nominal_responses)
-                bit_error_rates.append(bit_errors)
+        # Handle both API styles
+        if responses is not None and noise_responses is not None:
+            # README API style: direct comparison of nominal vs noisy responses
+            if len(responses) != len(noise_responses):
+                raise ValueError("responses and noise_responses must have same length")
             
-            # Calculate metrics
-            avg_ber = np.mean(bit_error_rates)
-            max_ber = np.max(bit_error_rates)
-            std_ber = np.std(bit_error_rates)
+            # Calculate bit error rate
+            bit_errors = np.mean(responses != noise_responses)
+            reliability_percent = (1 - bit_errors) * 100
             
-            reliability_metrics[condition] = {
-                'average_bit_error_rate': avg_ber,
-                'max_bit_error_rate': max_ber,
-                'std_bit_error_rate': std_ber,
-                'environmental_values': env_data[condition]
+            metrics = {
+                'overall_reliability': bit_errors,
+                'reliability_percent': reliability_percent,
+                'num_crps': len(responses),
+                'condition_metrics': {
+                    'noise': {
+                        'average_bit_error_rate': bit_errors,
+                        'max_bit_error_rate': bit_errors,
+                        'std_bit_error_rate': 0.0
+                    }
+                }
             }
-        
-        # Overall reliability score (lower is better)
-        overall_reliability = np.mean([
-            metrics['average_bit_error_rate']
-            for metrics in reliability_metrics.values()
-        ])
-        
-        metrics = {
-            'condition_metrics': reliability_metrics,
-            'overall_reliability': overall_reliability,
-            'num_crps': num_crps
-        }
+        else:
+            # Detailed API style: environmental analysis
+            if self.puf is None:
+                raise ValueError("PUF instance required for environmental analysis")
+            if self.data_generator is None:
+                raise ValueError("DataGenerator not initialized")
+            if num_crps is None or env_conditions is None:
+                raise ValueError("num_crps and env_conditions required for environmental analysis")
+            
+            # Generate reliability dataset
+            nominal_responses, condition_responses, env_data = \
+                self.data_generator.generate_reliability_dataset(
+                    self.puf,
+                    num_crps,
+                    env_conditions
+                )
+            
+            # Calculate reliability metrics for each condition
+            reliability_metrics = {}
+            
+            for condition, responses_list in condition_responses.items():
+                # Calculate bit error rate for each environmental value
+                bit_error_rates = []
+                for response in responses_list:
+                    bit_errors = np.mean(response != nominal_responses)
+                    bit_error_rates.append(bit_errors)
+                
+                # Calculate metrics
+                avg_ber = np.mean(bit_error_rates)
+                max_ber = np.max(bit_error_rates)
+                std_ber = np.std(bit_error_rates)
+                
+                reliability_metrics[condition] = {
+                    'average_bit_error_rate': avg_ber,
+                    'max_bit_error_rate': max_ber,
+                    'std_bit_error_rate': std_ber,
+                    'environmental_values': env_data[condition]
+                }
+            
+            # Overall reliability score (lower is better)
+            overall_reliability = np.mean([
+                metrics['average_bit_error_rate']
+                for metrics in reliability_metrics.values()
+            ])
+            
+            metrics = {
+                'condition_metrics': reliability_metrics,
+                'overall_reliability': overall_reliability,
+                'num_crps': num_crps
+            }
         
         self.analysis_results['reliability'] = metrics
         return metrics
@@ -155,6 +206,11 @@ class PUFAnalyzer:
         Returns:
             Dictionary containing bit aliasing metrics
         """
+        if self.puf is None:
+            raise ValueError("PUF instance required for bit aliasing analysis")
+        if self.data_generator is None:
+            raise ValueError("DataGenerator not initialized")
+        
         # Generate population of PUF instances
         puf_type = self.puf.__class__.__name__.lower().replace('puf', '')
         population = self.data_generator.generate_puf_population(
@@ -216,14 +272,14 @@ class PUFAnalyzer:
             Dictionary containing all analysis metrics
         """
         uniqueness = self.analyze_uniqueness(
-            num_instances,
-            num_challenges,
-            puf_params
+            num_instances=num_instances,
+            num_challenges=num_challenges,
+            puf_params=puf_params
         )
         
         reliability = self.analyze_reliability(
-            num_challenges,
-            env_conditions
+            num_crps=num_challenges,
+            env_conditions=env_conditions
         )
         
         bit_aliasing = self.analyze_bit_aliasing(

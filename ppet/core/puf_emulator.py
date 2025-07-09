@@ -96,47 +96,63 @@ class PUF:
 class ArbiterPUF(PUF):
     def __init__(
         self,
-        n_stages: int,
+        challenge_length: Optional[int] = None,
+        n_stages: Optional[int] = None,
         seed: Optional[int] = None,
         environmental_stressors: Optional[Dict[str, float]] = None
     ):
         """Initialize Arbiter PUF.
         
         Args:
-            n_stages: Number of stages in the arbiter chain
+            challenge_length: Number of challenge bits (preferred parameter name)
+            n_stages: Number of stages in the arbiter chain (legacy parameter name)
             seed: Random seed for reproducibility
             environmental_stressors: Environmental conditions
+        
+        Note:
+            Either challenge_length or n_stages must be provided. 
+            challenge_length takes precedence if both are given.
         
         References:
             - Gassend et al. "Silicon Physical Random Functions" (CCS 2002)
             - Majzoobi et al. "Testing Techniques for Hardware Security" (ITC 2008)
         """
         super().__init__(seed, environmental_stressors)
-        self.n_stages = n_stages
+        
+        # Handle parameter compatibility
+        if challenge_length is not None:
+            self.n_stages = challenge_length
+        elif n_stages is not None:
+            self.n_stages = n_stages
+        else:
+            raise ValueError("Either challenge_length or n_stages must be provided")
+        
+        # Store both for backward compatibility
+        self.challenge_length = self.n_stages
         
         # Initialize delay parameters based on manufacturing variations
         # Using hierarchical variation model: global + local variations
         self.global_variation = np.random.normal(0, 0.4)  # 40% global variation
         
         # Generate systematic variations (position-dependent)
-        position = np.linspace(-1, 1, n_stages)
+        position = np.linspace(-1, 1, self.n_stages)
         gradient = np.random.normal(0, 0.2)  # 20% gradient variation
         self.systematic_variation = gradient * position  # Linear gradient across stages
         
         # Generate local variations for each stage and path
         # Increased variation and ensured independence between paths
-        self.local_variations_top = np.random.normal(0, 0.3, size=n_stages)  # 30% local variation
-        self.local_variations_bottom = np.random.normal(0, 0.3, size=n_stages)  # 30% local variation
+        self.local_variations_top = np.random.normal(0, 0.3, size=self.n_stages)  # 30% local variation
+        self.local_variations_bottom = np.random.normal(0, 0.3, size=self.n_stages)  # 30% local variation
         
         # Generate arbiter bias
         self.arbiter_bias = np.random.normal(0, 0.15)  # 15% arbiter bias
         
         # Generate stage-specific environmental sensitivities
         # Ensure some stages are more sensitive than others
-        base_sensitivities = np.random.normal(1.0, 0.2, size=n_stages)  # ±20% variation in base sensitivity
-        self.temp_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=n_stages)
-        self.voltage_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=n_stages)
-        self.noise_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=n_stages)
+        base_sensitivities = np.random.normal(1.0, 0.2, size=self.n_stages)  # ±20% variation in base sensitivity
+        self.temp_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=self.n_stages)
+        self.voltage_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=self.n_stages)
+        self.noise_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=self.n_stages)
 
     def _apply_stage_environmental_effects(self, stage_idx: int, value: float) -> float:
         """Apply environmental effects to a specific stage.

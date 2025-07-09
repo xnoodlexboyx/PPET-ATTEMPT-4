@@ -1,9 +1,9 @@
 import numpy as np
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Optional
 from ..core.puf_emulator import PUF, ArbiterPUF, SRAMPUF, RingOscillatorPUF
 
 class DataGenerator:
-    def __init__(self, seed: int = None):
+    def __init__(self, seed: Optional[int] = None):
         """Initialize the data generator with an optional seed for reproducibility."""
         self.seed = seed
         if seed is not None:
@@ -112,7 +112,7 @@ class DataGenerator:
         puf: PUF,
         num_crps: int,
         env_conditions: Dict[str, Dict]
-    ) -> Tuple[np.ndarray, Dict[str, np.ndarray], np.ndarray]:
+    ) -> Tuple[np.ndarray, Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """Generate dataset for reliability analysis under various conditions.
         
         Args:
@@ -132,18 +132,24 @@ class DataGenerator:
         # Generate environmental data
         env_data = self.generate_environmental_data(env_conditions)
         
+        # Store original environmental stressors to restore later
+        original_stressors = puf.environmental_stressors.copy()
+        
         # Generate responses under each condition
         condition_responses = {}
         for condition, values in env_data.items():
             responses_under_condition = []
             for value in values:
-                # Set environmental stressor
-                puf.environmental_stressors = {condition: value}
+                # Update only the specific environmental stressor
+                puf.environmental_stressors[condition] = value
                 if isinstance(puf, SRAMPUF):
                     responses = puf.generate_crps(num_crps)
                 else:
                     _, responses = puf.generate_crps(num_crps)
                 responses_under_condition.append(responses)
             condition_responses[condition] = np.array(responses_under_condition)
+            
+        # Restore original environmental stressors
+        puf.environmental_stressors = original_stressors
         
         return nominal_responses, condition_responses, env_data 

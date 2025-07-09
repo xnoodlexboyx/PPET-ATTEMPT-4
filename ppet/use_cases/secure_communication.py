@@ -110,13 +110,13 @@ class SecureCommunicationProtocol:
         
         # Calculate match rate
         matches = np.sum(actual_responses == expected_responses)
-        confidence = matches / num_auth_crps
+        confidence = float(matches / num_auth_crps)
         
         # Mark CRPs as used
         device_data['used_crps'].update(auth_indices)
         
         # Authentication successful if confidence above threshold
-        success = confidence >= self.config.get('auth_threshold', 0.9)
+        success = bool(confidence >= self.config.get('auth_threshold', 0.9))
         logger.info(
             f"Device {device_id} authentication: "
             f"{'success' if success else 'failed'} "

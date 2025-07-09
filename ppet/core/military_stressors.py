@@ -103,7 +103,41 @@ class MilitaryStressors:
                 pulse_width=1e-6,
                 repetition_rate=1000.0
             ),
-            # ... similar profiles for other environments ...
+            MilitaryEnvironment.AIRCRAFT_INTERNAL: EMIProfile(
+                conducted_susceptibility=8.0,
+                radiated_susceptibility=150.0,
+                frequency_range=(10e3, 18e9),
+                pulse_width=1e-6,
+                repetition_rate=800.0
+            ),
+            MilitaryEnvironment.AIRCRAFT_EXTERNAL: EMIProfile(
+                conducted_susceptibility=15.0,
+                radiated_susceptibility=300.0,
+                frequency_range=(10e3, 18e9),
+                pulse_width=1e-6,
+                repetition_rate=1200.0
+            ),
+            MilitaryEnvironment.NAVAL_SHELTERED: EMIProfile(
+                conducted_susceptibility=12.0,
+                radiated_susceptibility=180.0,
+                frequency_range=(10e3, 18e9),
+                pulse_width=1e-6,
+                repetition_rate=600.0
+            ),
+            MilitaryEnvironment.NAVAL_EXPOSED: EMIProfile(
+                conducted_susceptibility=20.0,
+                radiated_susceptibility=400.0,
+                frequency_range=(10e3, 18e9),
+                pulse_width=1e-6,
+                repetition_rate=1500.0
+            ),
+            MilitaryEnvironment.SPACE_VEHICLE: EMIProfile(
+                conducted_susceptibility=5.0,
+                radiated_susceptibility=100.0,
+                frequency_range=(10e3, 18e9),
+                pulse_width=1e-6,
+                repetition_rate=2000.0
+            )
         }
         
         self.current_profile = self.temp_profiles[self.environment]

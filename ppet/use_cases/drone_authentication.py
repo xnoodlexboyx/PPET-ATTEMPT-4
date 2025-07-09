@@ -121,7 +121,7 @@ class DroneAuthenticationProtocol:
         
         # Calculate match rate
         matches = np.sum(actual_responses == expected_responses)
-        confidence = matches / num_auth_crps
+        confidence = float(matches / num_auth_crps)
         
         # Update drone data
         drone_data['used_crps'].update(auth_indices)
@@ -132,7 +132,7 @@ class DroneAuthenticationProtocol:
             drone_data['location'] = location
         
         # Authentication successful if confidence above threshold
-        success = confidence >= self.config.get('auth_threshold', 0.9)
+        success = bool(confidence >= self.config.get('auth_threshold', 0.9))
         
         # Prepare metrics
         metrics = {
