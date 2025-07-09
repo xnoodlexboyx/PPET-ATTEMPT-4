@@ -1,251 +1,313 @@
 # PPET User Guide
 
-This guide provides detailed instructions for using the PUF Plotting & Evaluation Toolkit (PPET).
+This guide provides detailed instructions for using the Defense-Oriented Physical Unclonable Function Emulation and Analysis Tool (PPET).
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
 2. [PUF Emulation](#puf-emulation)
-3. [Security Analysis](#security-analysis)
-4. [Use Cases](#use-cases)
-5. [Configuration](#configuration)
-6. [Best Practices](#best-practices)
+3. [Military Environment Simulation](#military-environment-simulation)
+4. [Security Analysis](#security-analysis)
+5. [Use Cases](#use-cases)
+6. [Configuration](#configuration)
+7. [Best Practices](#best-practices)
+8. [Military Standards Compliance](#military-standards-compliance)
 
 ## Introduction
 
-PPET is designed to help researchers and developers work with Physical Unclonable Functions (PUFs) by providing:
-- Accurate PUF emulation with realistic manufacturing and environmental variations
-- Comprehensive security analysis tools
-- Practical use case implementations
-- Extensible framework for custom applications
+PPET is a defense-oriented framework designed to help researchers and developers work with Physical Unclonable Functions (PUFs) in military and national security applications by providing:
+- Accurate PUF emulation with military-grade environmental modeling
+- Comprehensive security analysis for defense applications
+- Military-specific use case implementations
+- Extensible framework for custom defense applications
 
 ## PUF Emulation
 
-### Arbiter PUF
+### Arbiter PUF with Military Environment
 
-The Arbiter PUF emulator models a delay-based PUF with configurable parameters:
+The Arbiter PUF emulator now supports military-grade environmental conditions:
 
 ```python
 from ppet.core.puf_emulator import ArbiterPUF
+from ppet.core.military_stressors import MilitaryEnvironment
 
-# Create PUF with default parameters
-puf = ArbiterPUF(challenge_length=64)
-
-# Create PUF with custom parameters
+# Create PUF with military environment
 puf = ArbiterPUF(
-    challenge_length=128,
-    noise_sigma=0.1,        # Environmental noise
-    variation_sigma=0.2,    # Manufacturing variation
-    temperature_coeff=0.01  # Temperature sensitivity
+    n_stages=64,
+    military_environment=MilitaryEnvironment.GROUND_MOBILE,
+    mission_time=0.0  # Initial mission time
 )
 
-# Generate CRPs
-challenges, responses = puf.generate_crps(
-    num_crps=1000,
-    temperature=25.0  # Optional environmental conditions
-)
+# Generate CRPs with environmental updates
+puf.update_mission_time(500)  # Update to 500 hours
+challenges, responses = puf.generate_crps(num_crps=1000)
 ```
 
 ### SRAM PUF
 
-The SRAM PUF emulator models memory cell behavior:
+The SRAM PUF emulator with enhanced environmental modeling:
 
 ```python
 from ppet.core.puf_emulator import SRAMPUF
 
-# Create SRAM PUF
+# Create SRAM PUF with military environment
 puf = SRAMPUF(
-    array_size=(128, 128),  # Memory array dimensions
-    mismatch_sigma=0.2      # Transistor mismatch variation
+    array_size=(128, 128),
+    military_environment=MilitaryEnvironment.AIRCRAFT_INTERNAL
 )
 
-# Generate startup values
-responses = puf.generate_responses(
-    voltage=1.2,      # Supply voltage
-    temperature=25.0  # Temperature
-)
+# Generate startup values under stress
+responses = puf.generate_responses()
 ```
 
 ### Ring Oscillator PUF
 
-The Ring Oscillator PUF emulator includes spatial correlation:
+The Ring Oscillator PUF with military-grade features:
 
 ```python
 from ppet.core.puf_emulator import RingOscillatorPUF
 
-# Create RO-PUF
+# Create RO-PUF with military environment
 puf = RingOscillatorPUF(
     num_oscillators=256,
-    correlation_length=5.0  # Spatial correlation parameter
+    military_environment=MilitaryEnvironment.NAVAL_SHELTERED
 )
 
-# Generate frequency measurements
-frequencies = puf.measure_frequencies()
-
-# Generate responses by comparing oscillator pairs
+# Generate responses under environmental stress
 responses = puf.generate_responses(num_pairs=100)
+```
+
+## Military Environment Simulation
+
+PPET provides comprehensive military environment simulation:
+
+```python
+from ppet.core.military_stressors import MilitaryStressors, MilitaryEnvironment
+
+# Create military stressor simulator
+stressor = MilitaryStressors(
+    environment=MilitaryEnvironment.GROUND_MOBILE,
+    mission_duration=1000.0
+)
+
+# Get environmental conditions
+conditions = stressor.get_all_stressors(time=500)  # At 500 hours
+print(f"Temperature: {conditions['temperature']:.1f}°C")
+print(f"EMI Level: {conditions['em_noise']:.3f}")
+print(f"Aging Factor: {conditions['aging_factor']:.3f}")
+
+# Available military environments
+environments = [
+    MilitaryEnvironment.GROUND_MOBILE,     # -40°C to +85°C
+    MilitaryEnvironment.AIRCRAFT_INTERNAL, # -45°C to +70°C
+    MilitaryEnvironment.AIRCRAFT_EXTERNAL, # -55°C to +125°C
+    MilitaryEnvironment.NAVAL_SHELTERED,   # -10°C to +65°C
+    MilitaryEnvironment.NAVAL_EXPOSED,     # -25°C to +55°C
+    MilitaryEnvironment.SPACE_VEHICLE      # -65°C to +125°C
+]
 ```
 
 ## Security Analysis
 
-### PUF Quality Metrics
+### Enhanced PUF Quality Metrics
 
-Analyze PUF characteristics using the analyzer:
+Analyze PUF characteristics under military conditions:
 
 ```python
 from ppet.core.analysis import PUFAnalyzer
 
-analyzer = PUFAnalyzer()
+# Create analyzer with military PUF
+analyzer = PUFAnalyzer(puf)
 
-# Calculate metrics
-uniqueness = analyzer.analyze_uniqueness(responses)
-reliability = analyzer.analyze_reliability(responses, noise_responses)
-bit_aliasing = analyzer.analyze_bit_aliasing(responses)
-entropy = analyzer.analyze_entropy(responses)
+# Analyze reliability under stress
+analysis = analyzer.analyze_reliability_under_stress(
+    challenge,
+    num_trials=100,
+    time_points=[0, 250, 500, 750, 1000]
+)
 
-# Generate comprehensive report
-report = analyzer.generate_report()
+# Generate military-grade report
+report = analyzer.generate_reliability_report(
+    challenge,
+    MilitaryEnvironment.GROUND_MOBILE
+)
 
-# Visualize metrics
-analyzer.plot_metrics(save_path='puf_metrics.png')
+# Visualize military metrics
+analyzer.plot_reliability_analysis(analysis, "reliability.png")
+analyzer.plot_environmental_sensitivity(analysis, "sensitivity.png")
 ```
 
-### Threat Simulation
+### Advanced Threat Simulation
 
-Evaluate PUF security against various attacks:
+Evaluate PUF security against military-grade attacks:
 
 ```python
-from ppet.core.threat_simulator import MLAttack, SideChannelAttack
+from ppet.core.threat_simulator import (
+    MLAttack, EnhancedSideChannelAttack,
+    SupplyChainAttack, FaultInjectionAttack
+)
 
-# Machine Learning Attack
-ml_attack = MLAttack(model_type='rf')  # Random Forest model
+# Enhanced ML Attack with environmental awareness
+ml_attack = MLAttack(
+    model_type='rf',
+    environmental_augmentation=True,
+    military_environment=MilitaryEnvironment.GROUND_MOBILE
+)
 ml_attack.train(train_challenges, train_responses)
-success_rate = ml_attack.evaluate(test_challenges, test_responses)
 
-# Side-Channel Attack
-sca = SideChannelAttack(
+# Enhanced Side-Channel Attack
+sca = EnhancedSideChannelAttack(
     attack_type='power',
-    noise_std=0.1,
-    num_measurements=100
+    military_environment=MilitaryEnvironment.GROUND_MOBILE,
+    em_shielding=False
 )
 sca.train(challenges, responses)
-predictions = sca.predict(new_challenges)
+
+# Supply Chain Attack
+supply_attack = SupplyChainAttack(
+    tampering_rate=0.01,
+    detection_difficulty=0.8
+)
+supply_attack.train(challenges, responses)
+
+# Fault Injection Attack
+fault_attack = FaultInjectionAttack(
+    injection_type='voltage',  # voltage, clock, or laser
+    precision=0.8,
+    strength=0.5
+)
+fault_attack.train(challenges, responses)
 ```
 
 ## Use Cases
 
-### Secure Communication
-
-Implement secure device authentication and communication:
+### Military Communication Protocol
 
 ```python
 from ppet.use_cases.secure_communication import SecureCommunicationProtocol
 
-# Initialize protocol
+# Initialize protocol with military environment
 protocol = SecureCommunicationProtocol(
     challenge_length=64,
-    num_crps=1000
+    military_environment=MilitaryEnvironment.GROUND_MOBILE
 )
 
-# Device enrollment
-device_id = "device_001"
+# Enroll and authenticate under stress
+device_id = "military_device_001"
 protocol.enroll_device(device_id)
-
-# Authentication
 success, confidence = protocol.authenticate_device(device_id)
 
 # Secure communication
 if success:
-    # Generate session key
     key = protocol.generate_session_key(device_id)
-    
-    # Exchange messages
     encrypted = protocol.encrypt_message(device_id, message)
     decrypted = protocol.decrypt_message(device_id, encrypted)
 ```
 
-### Drone Authentication
-
-Secure drone-to-ground communication:
+### Military Drone Authentication
 
 ```python
 from ppet.use_cases.drone_authentication import DroneAuthenticationProtocol
 
-# Initialize protocol
+# Initialize with military parameters
 protocol = DroneAuthenticationProtocol(
     challenge_length=128,
-    num_crps=1000
+    military_environment=MilitaryEnvironment.AIRCRAFT_EXTERNAL
 )
 
-# Enroll drone with location
-drone_id = "drone_001"
-location = (37.7749, -122.4194, 100.0)  # lat, lon, altitude
+# Enroll drone with mission parameters
+drone_id = "military_drone_001"
+location = (37.7749, -122.4194, 1000.0)
 protocol.enroll_drone(drone_id, location)
 
-# Authenticate drone
+# Authenticate with environmental consideration
 success, confidence, metrics = protocol.authenticate_drone(
     drone_id,
     num_auth_crps=10,
-    location=(37.7750, -122.4195, 120.0)
+    location=(37.7750, -122.4195, 1200.0)
 )
-
-# Establish secure channel
-if success:
-    session = protocol.establish_secure_channel(drone_id)
 ```
 
 ## Configuration
 
-PPET can be configured using YAML or JSON files:
+Military-grade configuration options:
 
 ```yaml
-# config.yaml
+# military_config.yaml
+military_environment:
+  type: "ground_mobile"  # ground_mobile, aircraft_internal, aircraft_external, naval_sheltered, naval_exposed, space_vehicle
+  mission_duration: 1000.0  # hours
+  em_shielding: false
+
 puf_params:
   challenge_length: 64
-  noise_sigma: 0.1
-  variation_sigma: 0.2
-  temperature_coeff: 0.01
+  environmental_sensitivity: true
+  aging_enabled: true
+
+security_analysis:
+  ml_attack_models: ["rf", "mlp"]
+  environmental_augmentation: true
+  supply_chain_tampering_rate: 0.01
+  fault_injection_types: ["voltage", "clock", "laser"]
 
 auth_threshold: 0.9
+confidence_threshold: 0.85
 
 logging:
   level: INFO
-  file: ppet.log
+  file: ppet_military.log
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-```
-
-Load configuration:
-
-```python
-from ppet.utilities.config_manager import load_config
-
-config = load_config('config.yaml')
-protocol = SecureCommunicationProtocol(config_path='config.yaml')
 ```
 
 ## Best Practices
 
-1. **PUF Selection**
-   - Choose PUF type based on application requirements
-   - Consider resource constraints and security needs
-   - Test with realistic environmental conditions
+1. **Military Environment Selection**
+   - Choose appropriate environment profile for the application
+   - Consider mission duration and environmental extremes
+   - Test across full temperature and EMI ranges
+   - Validate aging effects for long-term missions
 
-2. **Security Analysis**
-   - Regularly evaluate PUF quality metrics
-   - Test against multiple attack vectors
-   - Monitor for changes in PUF behavior
+2. **Enhanced Security Analysis**
+   - Test against all military-grade attack vectors
+   - Include environmental variations in attack models
+   - Monitor PUF behavior across mission timeline
+   - Validate supply chain security measures
 
 3. **Authentication Protocol**
-   - Use sufficient number of CRPs
+   - Use sufficient CRPs for military-grade security
    - Implement proper session management
-   - Handle error cases gracefully
+   - Handle environmental variations gracefully
+   - Monitor for tampering attempts
 
-4. **Configuration**
-   - Use version control for config files
-   - Document parameter choices
-   - Test with different configurations
+4. **Military Configuration**
+   - Document all military-specific parameters
+   - Version control configuration files
+   - Test with different environmental profiles
+   - Validate against military standards
 
-5. **Testing**
-   - Write comprehensive unit tests
-   - Include integration tests
-   - Test edge cases and error conditions 
+5. **Comprehensive Testing**
+   - Test under all supported military environments
+   - Validate against military specifications
+   - Include long-term reliability testing
+   - Document all test conditions and results
+
+## Military Standards Compliance
+
+PPET implements models based on:
+
+1. **MIL-STD-810H**
+   - Environmental Engineering Considerations
+   - Temperature, Humidity, Shock, Vibration
+   - Altitude, Solar Radiation, Salt Fog
+
+2. **MIL-STD-461G**
+   - Electromagnetic Interference
+   - Conducted Emissions
+   - Radiated Susceptibility
+   - Transient Susceptibility
+
+3. **MIL-STD-883K**
+   - Microcircuit Test Methods
+   - Temperature Cycling
+   - Mechanical Shock
+   - Particle Impact Noise 
