@@ -3,6 +3,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
 from typing import List, Dict, Optional, Tuple, Union
 from .puf_emulator import PUF
 from .military_stressors import MilitaryEnvironment, MilitaryStressors
@@ -273,4 +276,409 @@ class PUFAnalyzer:
             'temperature_sensitivity_percent': temp_sensitivity,
             'emi_sensitivity_percent': emi_sensitivity,
             'aging_impact': np.mean(stress_data['aging_factors']) - 1.0
-        } 
+        }
+
+    def analyze_uniqueness(self, pufs: List[PUF], num_crps: int = 1000) -> Dict[str, np.ndarray]:
+        """Analyze uniqueness between multiple PUF instances.
+        
+        Args:
+            pufs: List of PUF instances to analyze
+            num_crps: Number of challenge-response pairs to generate
+            
+        Returns:
+            Dictionary containing uniqueness metrics and pairwise distances
+        """
+        num_pufs = len(pufs)
+        responses = []
+        
+        # Generate same challenges for all PUFs
+        if hasattr(pufs[0], 'n_stages'):
+            # For ArbiterPUF
+            challenges = np.random.randint(0, 2, size=(num_crps, pufs[0].n_stages))
+        else:
+            # For other PUF types, use generate_crps method
+            challenges = None
+            
+        # Collect responses from all PUFs
+        for puf in pufs:
+            if challenges is not None:
+                _, puf_responses = puf.generate_crps(num_crps, challenges)
+            else:
+                puf_responses = puf.generate_crps(num_crps)
+                if isinstance(puf_responses, tuple):
+                    puf_responses = puf_responses[1]
+            responses.append(puf_responses)
+        
+        responses = np.array(responses)
+        
+        # Calculate pairwise Hamming distances
+        hamming_distances = np.zeros((num_pufs, num_pufs))
+        for i in range(num_pufs):
+            for j in range(i+1, num_pufs):
+                if responses.ndim == 3:  # SRAM PUF case
+                    hamming_dist = np.mean(responses[i] != responses[j])
+                else:  # Arbiter/RO PUF case
+                    hamming_dist = np.mean(responses[i] != responses[j])
+                hamming_distances[i, j] = hamming_distances[j, i] = hamming_dist
+        
+        # Calculate uniqueness metrics
+        upper_triangle = np.triu_indices(num_pufs, k=1)
+        pairwise_distances = hamming_distances[upper_triangle]
+        
+        return {
+            'hamming_distances': hamming_distances,
+            'pairwise_distances': pairwise_distances,
+            'mean_uniqueness': np.mean(pairwise_distances),
+            'std_uniqueness': np.std(pairwise_distances),
+            'responses': responses,
+            'num_pufs': num_pufs
+        }
+
+    def plot_uniqueness_analysis(self, uniqueness_data: Dict[str, np.ndarray], 
+                               save_path: Optional[str] = None, use_plotly: bool = False):
+        """Create comprehensive uniqueness visualization.
+        
+        Args:
+            uniqueness_data: Data from analyze_uniqueness
+            save_path: Optional path to save the plot
+            use_plotly: Whether to use Plotly for interactive plots
+        """
+        if use_plotly:
+            self._plot_uniqueness_plotly(uniqueness_data, save_path)
+        else:
+            self._plot_uniqueness_matplotlib(uniqueness_data, save_path)
+
+    def _plot_uniqueness_matplotlib(self, uniqueness_data: Dict[str, np.ndarray], 
+                                   save_path: Optional[str] = None):
+        """Create uniqueness visualization using Matplotlib."""
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        
+        # Histogram of pairwise distances
+        axes[0, 0].hist(uniqueness_data['pairwise_distances'], bins=30, alpha=0.7, 
+                       color='blue', edgecolor='black')
+        axes[0, 0].axvline(0.5, color='red', linestyle='--', label='Ideal (50%)')
+        axes[0, 0].axvline(uniqueness_data['mean_uniqueness'], color='green', 
+                          linestyle='-', label=f'Mean ({uniqueness_data["mean_uniqueness"]:.3f})')
+        axes[0, 0].set_xlabel('Hamming Distance')
+        axes[0, 0].set_ylabel('Frequency')
+        axes[0, 0].set_title('Distribution of Pairwise Hamming Distances')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # Heatmap of distance matrix
+        im = axes[0, 1].imshow(uniqueness_data['hamming_distances'], cmap='viridis')
+        axes[0, 1].set_title('Pairwise Hamming Distance Matrix')
+        axes[0, 1].set_xlabel('PUF Index')
+        axes[0, 1].set_ylabel('PUF Index')
+        plt.colorbar(im, ax=axes[0, 1], label='Hamming Distance')
+        
+        # Scatter plot of distance vs PUF pair indices
+        num_pufs = uniqueness_data['num_pufs']
+        pair_indices = []
+        distances = []
+        for i in range(num_pufs):
+            for j in range(i+1, num_pufs):
+                pair_indices.append(f"{i}-{j}")
+                distances.append(uniqueness_data['hamming_distances'][i, j])
+        
+        axes[1, 0].scatter(range(len(distances)), distances, alpha=0.6)
+        axes[1, 0].axhline(0.5, color='red', linestyle='--', label='Ideal (50%)')
+        axes[1, 0].set_xlabel('PUF Pair Index')
+        axes[1, 0].set_ylabel('Hamming Distance')
+        axes[1, 0].set_title('Uniqueness Scatter Plot')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # Box plot of uniqueness distribution
+        axes[1, 1].boxplot(uniqueness_data['pairwise_distances'], patch_artist=True)
+        axes[1, 1].axhline(0.5, color='red', linestyle='--', label='Ideal (50%)')
+        axes[1, 1].set_ylabel('Hamming Distance')
+        axes[1, 1].set_title('Uniqueness Distribution (Box Plot)')
+        axes[1, 1].legend()
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.show()
+
+    def _plot_uniqueness_plotly(self, uniqueness_data: Dict[str, np.ndarray], 
+                               save_path: Optional[str] = None):
+        """Create interactive uniqueness visualization using Plotly."""
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('Hamming Distance Distribution', 'Distance Matrix Heatmap',
+                           'Uniqueness Scatter Plot', 'Box Plot'),
+            specs=[[{"secondary_y": False}, {"secondary_y": False}],
+                   [{"secondary_y": False}, {"secondary_y": False}]]
+        )
+        
+        # Histogram
+        fig.add_trace(
+            go.Histogram(x=uniqueness_data['pairwise_distances'], name='Distances',
+                        nbinsx=30, opacity=0.7),
+            row=1, col=1
+        )
+        
+        # Heatmap
+        fig.add_trace(
+            go.Heatmap(z=uniqueness_data['hamming_distances'], 
+                      colorscale='viridis', name='Distance Matrix'),
+            row=1, col=2
+        )
+        
+        # Scatter plot
+        num_pufs = uniqueness_data['num_pufs']
+        distances = []
+        for i in range(num_pufs):
+            for j in range(i+1, num_pufs):
+                distances.append(uniqueness_data['hamming_distances'][i, j])
+        
+        fig.add_trace(
+            go.Scatter(x=list(range(len(distances))), y=distances, 
+                      mode='markers', name='Pairwise Distances'),
+            row=2, col=1
+        )
+        
+        # Box plot
+        fig.add_trace(
+            go.Box(y=uniqueness_data['pairwise_distances'], name='Distribution'),
+            row=2, col=2
+        )
+        
+        fig.update_layout(height=800, showlegend=True,
+                         title_text="PUF Uniqueness Analysis")
+        
+        if save_path:
+            fig.write_html(save_path)
+        fig.show()
+
+    def analyze_bit_aliasing(self, pufs: List[PUF], num_crps: int = 1000) -> Dict[str, np.ndarray]:
+        """Analyze bit-aliasing patterns across PUF instances.
+        
+        Args:
+            pufs: List of PUF instances to analyze
+            num_crps: Number of challenge-response pairs to generate
+            
+        Returns:
+            Dictionary containing bit-aliasing metrics
+        """
+        responses = []
+        
+        # Generate responses from all PUFs
+        for puf in pufs:
+            if hasattr(puf, 'n_stages'):
+                # For ArbiterPUF - single bit responses
+                challenges = np.random.randint(0, 2, size=(num_crps, puf.n_stages))
+                _, puf_responses = puf.generate_crps(num_crps, challenges)
+                responses.append(puf_responses)
+            else:
+                # For SRAM PUF - multi-bit responses
+                puf_responses = puf.generate_crps(num_crps)
+                if isinstance(puf_responses, tuple):
+                    puf_responses = puf_responses[1]
+                responses.append(puf_responses)
+        
+        responses = np.array(responses)
+        
+        # Calculate bit frequencies
+        if responses.ndim == 2:  # Single bit responses (Arbiter/RO PUF)
+            bit_frequencies = np.mean(responses, axis=0)
+            bit_positions = np.arange(len(bit_frequencies))
+        else:  # Multi-bit responses (SRAM PUF)
+            # Flatten the responses and calculate frequencies per bit position
+            flattened = responses.reshape(len(pufs), -1)
+            bit_frequencies = np.mean(flattened, axis=0)
+            bit_positions = np.arange(len(bit_frequencies))
+        
+        # Calculate aliasing metrics
+        ideal_frequency = 0.5
+        aliasing_deviation = np.abs(bit_frequencies - ideal_frequency)
+        
+        return {
+            'bit_frequencies': bit_frequencies,
+            'bit_positions': bit_positions,
+            'aliasing_deviation': aliasing_deviation,
+            'mean_aliasing': np.mean(aliasing_deviation),
+            'max_aliasing': np.max(aliasing_deviation),
+            'responses': responses
+        }
+
+    def plot_bit_aliasing_analysis(self, aliasing_data: Dict[str, np.ndarray], 
+                                  save_path: Optional[str] = None, use_plotly: bool = False):
+        """Create comprehensive bit-aliasing visualization.
+        
+        Args:
+            aliasing_data: Data from analyze_bit_aliasing
+            save_path: Optional path to save the plot
+            use_plotly: Whether to use Plotly for interactive plots
+        """
+        if use_plotly:
+            self._plot_bit_aliasing_plotly(aliasing_data, save_path)
+        else:
+            self._plot_bit_aliasing_matplotlib(aliasing_data, save_path)
+
+    def _plot_bit_aliasing_matplotlib(self, aliasing_data: Dict[str, np.ndarray], 
+                                     save_path: Optional[str] = None):
+        """Create bit-aliasing visualization using Matplotlib."""
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        
+        # Bar graph of bit frequencies
+        axes[0, 0].bar(aliasing_data['bit_positions'], aliasing_data['bit_frequencies'], 
+                       alpha=0.7, color='blue')
+        axes[0, 0].axhline(0.5, color='red', linestyle='--', label='Ideal (50%)')
+        axes[0, 0].set_xlabel('Bit Position')
+        axes[0, 0].set_ylabel('Frequency of 1s')
+        axes[0, 0].set_title('Bit Frequencies Across Positions')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # Heatmap of bit frequencies (reshaped if possible)
+        if len(aliasing_data['bit_frequencies']) > 1:
+            # Try to reshape into a 2D grid for better visualization
+            n_bits = len(aliasing_data['bit_frequencies'])
+            grid_size = int(np.sqrt(n_bits))
+            if grid_size * grid_size == n_bits:
+                freq_matrix = aliasing_data['bit_frequencies'].reshape(grid_size, grid_size)
+            else:
+                # Create a rectangular grid
+                rows = int(np.sqrt(n_bits))
+                cols = int(np.ceil(n_bits / rows))
+                padded_freq = np.pad(aliasing_data['bit_frequencies'], 
+                                   (0, rows * cols - n_bits), mode='constant', constant_values=0.5)
+                freq_matrix = padded_freq.reshape(rows, cols)
+            
+            im = axes[0, 1].imshow(freq_matrix, cmap='RdBu_r', vmin=0, vmax=1)
+            axes[0, 1].set_title('Bit Frequency Heatmap')
+            axes[0, 1].set_xlabel('Column')
+            axes[0, 1].set_ylabel('Row')
+            plt.colorbar(im, ax=axes[0, 1], label='Frequency of 1s')
+        
+        # Aliasing deviation plot
+        axes[1, 0].plot(aliasing_data['bit_positions'], aliasing_data['aliasing_deviation'], 
+                       'o-', alpha=0.7, color='green')
+        axes[1, 0].axhline(aliasing_data['mean_aliasing'], color='red', linestyle='--', 
+                          label=f'Mean ({aliasing_data["mean_aliasing"]:.3f})')
+        axes[1, 0].set_xlabel('Bit Position')
+        axes[1, 0].set_ylabel('Aliasing Deviation')
+        axes[1, 0].set_title('Bit Aliasing Deviation from Ideal')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # Histogram of aliasing deviations
+        axes[1, 1].hist(aliasing_data['aliasing_deviation'], bins=30, alpha=0.7, 
+                       color='orange', edgecolor='black')
+        axes[1, 1].axvline(aliasing_data['mean_aliasing'], color='red', linestyle='--', 
+                          label=f'Mean ({aliasing_data["mean_aliasing"]:.3f})')
+        axes[1, 1].set_xlabel('Aliasing Deviation')
+        axes[1, 1].set_ylabel('Frequency')
+        axes[1, 1].set_title('Distribution of Aliasing Deviations')
+        axes[1, 1].legend()
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.show()
+
+    def _plot_bit_aliasing_plotly(self, aliasing_data: Dict[str, np.ndarray], 
+                                 save_path: Optional[str] = None):
+        """Create interactive bit-aliasing visualization using Plotly."""
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('Bit Frequencies', 'Frequency Heatmap',
+                           'Aliasing Deviation', 'Deviation Distribution'),
+            specs=[[{"secondary_y": False}, {"secondary_y": False}],
+                   [{"secondary_y": False}, {"secondary_y": False}]]
+        )
+        
+        # Bar graph
+        fig.add_trace(
+            go.Bar(x=aliasing_data['bit_positions'], y=aliasing_data['bit_frequencies'], 
+                   name='Bit Frequencies'),
+            row=1, col=1
+        )
+        
+        # Heatmap (if possible to reshape)
+        n_bits = len(aliasing_data['bit_frequencies'])
+        grid_size = int(np.sqrt(n_bits))
+        if grid_size * grid_size == n_bits:
+            freq_matrix = aliasing_data['bit_frequencies'].reshape(grid_size, grid_size)
+            fig.add_trace(
+                go.Heatmap(z=freq_matrix, colorscale='RdBu_r', name='Frequency Heatmap'),
+                row=1, col=2
+            )
+        
+        # Line plot of deviations
+        fig.add_trace(
+            go.Scatter(x=aliasing_data['bit_positions'], y=aliasing_data['aliasing_deviation'],
+                      mode='lines+markers', name='Aliasing Deviation'),
+            row=2, col=1
+        )
+        
+        # Histogram of deviations
+        fig.add_trace(
+            go.Histogram(x=aliasing_data['aliasing_deviation'], name='Deviation Distribution'),
+            row=2, col=2
+        )
+        
+        fig.update_layout(height=800, showlegend=True,
+                         title_text="PUF Bit-Aliasing Analysis")
+        
+        if save_path:
+            fig.write_html(save_path)
+        fig.show()
+
+    def generate_comprehensive_report(self, pufs: List[PUF], environment: MilitaryEnvironment,
+                                    num_crps: int = 1000, save_dir: Optional[str] = None,
+                                    use_plotly: bool = False) -> Dict[str, float]:
+        """Generate comprehensive PUF analysis report with all visualizations.
+        
+        Args:
+            pufs: List of PUF instances to analyze
+            environment: Military environment profile
+            num_crps: Number of challenge-response pairs to generate
+            save_dir: Directory to save visualizations
+            use_plotly: Whether to use Plotly for interactive plots
+            
+        Returns:
+            Dictionary containing all analysis metrics
+        """
+        # Initialize results dictionary
+        results = {}
+        
+        # Analyze single PUF reliability under stress
+        if pufs:
+            reliability_data = self.analyze_reliability_under_stress(
+                np.random.randint(0, 2, size=getattr(pufs[0], 'n_stages', 64))
+            )
+            results.update(self.generate_reliability_report(
+                np.random.randint(0, 2, size=getattr(pufs[0], 'n_stages', 64)),
+                environment,
+                f"{save_dir}/reliability" if save_dir else None
+            ))
+            
+            # Analyze uniqueness across PUFs
+            uniqueness_data = self.analyze_uniqueness(pufs, num_crps)
+            results.update({
+                'mean_uniqueness': uniqueness_data['mean_uniqueness'],
+                'std_uniqueness': uniqueness_data['std_uniqueness']
+            })
+            
+            # Analyze bit-aliasing
+            aliasing_data = self.analyze_bit_aliasing(pufs, num_crps)
+            results.update({
+                'mean_aliasing': aliasing_data['mean_aliasing'],
+                'max_aliasing': aliasing_data['max_aliasing']
+            })
+            
+            # Generate visualizations
+            if save_dir:
+                self.plot_uniqueness_analysis(uniqueness_data, 
+                                            f"{save_dir}/uniqueness.{'html' if use_plotly else 'png'}", 
+                                            use_plotly)
+                self.plot_bit_aliasing_analysis(aliasing_data, 
+                                               f"{save_dir}/bit_aliasing.{'html' if use_plotly else 'png'}", 
+                                               use_plotly)
+        
+        return results 
