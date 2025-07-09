@@ -2,7 +2,7 @@
 
 from .puf_emulator import PUF, ArbiterPUF, SRAMPUF, RingOscillatorPUF
 from .threat_simulator import Attack, MLAttack, SideChannelAttack
-from .analyzer import PUFAnalyzer
+from .analysis import PUFAnalyzer
 
 __all__ = [
     'PUF',

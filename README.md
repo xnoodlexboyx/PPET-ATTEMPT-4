@@ -1,6 +1,6 @@
 # PPET: Physical Unclonable Function Emulation and Analysis Tool
 
-PPET is a comprehensive framework for emulating and analyzing Physical Unclonable Functions (PUFs) in hardware security applications. The framework provides accurate PUF models, security analysis tools, and practical use cases for PUF-based authentication and secure communication.
+PPET is a comprehensive framework for emulating and analyzing Physical Unclonable Functions (PUFs) in hardware security applications. The framework provides accurate PUF models, security analysis tools, and practical use cases for PUF-based authentication and secure communication in harsh environments and high-security applications.
 
 ## Features
 

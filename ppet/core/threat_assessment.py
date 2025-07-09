@@ -1,8 +1,8 @@
 """
-Comprehensive threat assessment report generation for defense applications.
+Comprehensive threat assessment report generation for high-security applications.
 
 This module provides automated threat assessment reporting capabilities
-for military and defense PUF deployments.
+for high-security and harsh environment PUF deployments.
 """
 
 import numpy as np
@@ -16,7 +16,7 @@ from .military_stressors import MilitaryEnvironment, MilitaryStressors
 from .threat_simulator import Attack, MLAttack, SideChannelAttack, SupplyChainAttack, FaultInjectionAttack
 
 class ThreatAssessmentReportGenerator:
-    """Generate comprehensive threat assessment reports for defense applications."""
+    """Generate comprehensive threat assessment reports for high-security applications."""
     
     def __init__(self, classification_level: str = "UNCLASSIFIED"):
         """Initialize threat assessment report generator.
@@ -27,18 +27,18 @@ class ThreatAssessmentReportGenerator:
         self.classification_level = classification_level
         self.report_timestamp = datetime.now()
         
-    def generate_defense_procurement_report(
+    def generate_security_assessment_report(
         self,
         pufs: List[PUF],
         environment: MilitaryEnvironment,
         use_cases: List[str],
         output_dir: str = "threat_assessment_report"
     ) -> Dict:
-        """Generate comprehensive defense procurement report.
+        """Generate comprehensive security assessment report.
         
         Args:
             pufs: List of PUF instances to evaluate
-            environment: Military environment profile
+            environment: Environmental profile
             use_cases: List of use case names
             output_dir: Directory to save report files
             
@@ -100,7 +100,7 @@ class ThreatAssessmentReportGenerator:
         
         # 4. Threat Landscape Assessment
         print("Conducting threat landscape assessment...")
-        attacks = self._create_defense_attack_suite(environment)
+        attacks = self._create_security_attack_suite(environment)
         
         # Generate 3D threat landscape
         analyzer.plot_3d_threat_landscape(
@@ -158,8 +158,8 @@ class ThreatAssessmentReportGenerator:
         
         return report_data
     
-    def _create_defense_attack_suite(self, environment: MilitaryEnvironment) -> List[Attack]:
-        """Create comprehensive attack suite for defense evaluation."""
+    def _create_security_attack_suite(self, environment: MilitaryEnvironment) -> List[Attack]:
+        """Create comprehensive attack suite for security evaluation."""
         attacks = []
         
         # Machine Learning Attacks

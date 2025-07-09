@@ -107,9 +107,22 @@ class ArbiterPUF(PUF):
             seed: Random seed for reproducibility
             environmental_stressors: Environmental conditions
         
+        Mathematical Model:
+            The delay difference for an n-stage arbiter PUF is:
+            Δt = Σ(i=1 to n) c_i × (Δd_i,top - Δd_i,bottom)
+            
+            Where delays follow hierarchical variation:
+            Δd_i,path = G + S_i + L_i,path + E_i,path(t)
+            
+            G ~ N(0, 0.4²): Global process variation
+            S_i ~ N(0, 0.2²): Systematic variation  
+            L_i,path ~ N(0, 0.3²): Local random variation
+            E_i,path(t): Environmental effects
+            
         References:
             - Gassend et al. "Silicon Physical Random Functions" (CCS 2002)
             - Majzoobi et al. "Testing Techniques for Hardware Security" (ITC 2008)
+            - Lim et al. "Extracting Secret Keys from Integrated Circuits" (IEEE TC 2005)
         """
         super().__init__(seed, environmental_stressors)
         self.n_stages = n_stages

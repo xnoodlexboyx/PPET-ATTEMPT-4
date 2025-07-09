@@ -12,7 +12,8 @@ import os
 sys.path.append('.')
 
 from ppet.core.puf_emulator import ArbiterPUF, SRAMPUF, RingOscillatorPUF
-from ppet.core.military_stressors import MilitaryEnvironment
+from ppet.core.military_stressors import Military
+Environment
 from ppet.core.threat_assessment import ThreatAssessmentReportGenerator
 
 def create_defense_puf_suite() -> list:

@@ -1,7 +1,7 @@
-"""Military-grade environmental stressor models for PUF simulation.
+"""Harsh environment and high-security environmental stressor models for PUF simulation.
 
-This module provides comprehensive models for simulating military-specific
-environmental conditions and their effects on PUF behavior.
+This module provides comprehensive models for simulating extreme environmental
+conditions and their effects on PUF behavior in harsh deployment scenarios.
 
 References:
     - MIL-STD-810H: Environmental Engineering Considerations
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 class MilitaryEnvironment(Enum):
-    """Military environment profiles based on MIL-STD-810H."""
+    """Harsh environment profiles based on MIL-STD-810H."""
     GROUND_MOBILE = "ground_mobile"
     AIRCRAFT_INTERNAL = "aircraft_internal"
     AIRCRAFT_EXTERNAL = "aircraft_external"
@@ -42,7 +42,7 @@ class EMIProfile:
     repetition_rate: float  # Hz
 
 class MilitaryStressors:
-    """Military-grade environmental stressor simulator."""
+    """Harsh environment and high-security environmental stressor simulator."""
     
     def __init__(
         self,
@@ -50,10 +50,10 @@ class MilitaryStressors:
         mission_duration: float = 1000.0,  # hours
         seed: Optional[int] = None
     ):
-        """Initialize military stressor simulator.
+        """Initialize environmental stressor simulator.
         
         Args:
-            environment: Military environment profile
+            environment: Environmental profile
             mission_duration: Total mission duration in hours
             seed: Random seed for reproducibility
         """

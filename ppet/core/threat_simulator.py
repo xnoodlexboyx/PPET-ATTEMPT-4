@@ -291,7 +291,7 @@ class SideChannelAttack(Attack):
         return (avg_measurements > self.threshold).astype(int) 
 
 class EnhancedSideChannelAttack(SideChannelAttack):
-    """Enhanced side-channel attack with military-grade capabilities."""
+    """Enhanced side-channel attack with harsh environment and high-security capabilities."""
     
     def __init__(
         self,
@@ -498,4 +498,429 @@ class FaultInjectionAttack(Attack):
             
             responses[i] = np.sum(faulted_challenge) % 2
             
-        return responses 
+        return responses
+
+class InvasiveAttack(Attack):
+    """Invasive attack simulation (decapping, probing)."""
+    
+    def __init__(
+        self,
+        attack_type: str = 'decapping',  # decapping, probing, or tampering
+        precision: float = 0.9,  # Physical precision
+        coverage: float = 0.7   # Percentage of circuit accessible
+    ):
+        """Initialize invasive attack.
+        
+        Args:
+            attack_type: Type of invasive attack
+            precision: Physical precision (0-1)
+            coverage: Circuit coverage (0-1)
+        """
+        super().__init__(f'INVASIVE_{attack_type.upper()}')
+        self.attack_type = attack_type
+        self.precision = precision
+        self.coverage = coverage
+        self.extracted_parameters = None
+    
+    def train(self, challenges: np.ndarray, responses: np.ndarray) -> None:
+        """Extract physical parameters through invasive methods.
+        
+        Args:
+            challenges: Challenge bit vectors
+            responses: Response bits
+        """
+        # Simulate physical parameter extraction
+        num_stages = challenges.shape[1]
+        accessible_stages = int(num_stages * self.coverage)
+        
+        # Extract delay parameters for accessible stages
+        self.extracted_parameters = {}
+        for stage in range(accessible_stages):
+            # Simulate measurement with precision-dependent noise
+            measurement_noise = np.random.normal(0, 1 - self.precision)
+            self.extracted_parameters[stage] = {
+                'delay': np.random.normal(0, 0.1) + measurement_noise,
+                'bias': np.random.normal(0, 0.05) + measurement_noise
+            }
+        
+        # Calculate success rate based on extracted information
+        self.success_rate = self.coverage * self.precision
+    
+    def evaluate(self, challenges: np.ndarray, responses: np.ndarray) -> float:
+        """Evaluate invasive attack success rate.
+        
+        Args:
+            challenges: Challenge bit vectors
+            responses: True response bits
+            
+        Returns:
+            Attack success rate
+        """
+        if self.extracted_parameters is None:
+            raise RuntimeError("Attack not trained. Call train() first.")
+        
+        # Predict responses using extracted parameters
+        predicted_responses = np.zeros(len(challenges))
+        
+        for i, challenge in enumerate(challenges):
+            # Calculate delay difference using extracted parameters
+            delay_diff = 0
+            for stage, params in self.extracted_parameters.items():
+                if stage < len(challenge):
+                    path_selection = challenge[stage]
+                    delay_diff += params['delay'] * (2 * path_selection - 1)
+            
+            # Add arbiter bias
+            delay_diff += self.extracted_parameters.get(0, {}).get('bias', 0)
+            
+            # Generate response
+            predicted_responses[i] = 1 if delay_diff > 0 else 0
+        
+        # Calculate accuracy
+        accuracy = np.mean(predicted_responses == responses)
+        return accuracy
+
+class DeepLearningAttack(MLAttack):
+    """Deep learning-based attack using neural networks."""
+    
+    def __init__(
+        self,
+        architecture: str = 'lstm',  # lstm, transformer, or cnn
+        hidden_layers: int = 3,
+        neurons_per_layer: int = 128,
+        environmental_augmentation: bool = True,
+        military_environment: Optional[MilitaryEnvironment] = None
+    ):
+        """Initialize deep learning attack.
+        
+        Args:
+            architecture: Neural network architecture
+            hidden_layers: Number of hidden layers
+            neurons_per_layer: Neurons per hidden layer
+            environmental_augmentation: Whether to use environmental data
+            military_environment: Environmental conditions for augmentation
+        """
+        super().__init__('mlp', environmental_augmentation, military_environment)
+        self.name = f'DL_{architecture.upper()}'
+        self.architecture = architecture
+        self.hidden_layers = hidden_layers
+        self.neurons_per_layer = neurons_per_layer
+        
+        # Import tensorflow only if needed
+        try:
+            import tensorflow as tf
+            self.tf = tf
+            self.tf_available = True
+        except ImportError:
+            self.tf_available = False
+            print("Warning: TensorFlow not available. Using sklearn MLPClassifier instead.")
+    
+    def train(self, challenges: np.ndarray, responses: np.ndarray) -> None:
+        """Train deep learning model.
+        
+        Args:
+            challenges: Challenge bit vectors
+            responses: Response bits
+        """
+        if not self.tf_available:
+            # Fall back to sklearn
+            super().train(challenges, responses)
+            return
+        
+        # Prepare features
+        features = self._prepare_features(challenges)
+        
+        # Create deep learning model
+        if self.architecture == 'lstm':
+            model = self._create_lstm_model(features.shape[1])
+        elif self.architecture == 'transformer':
+            model = self._create_transformer_model(features.shape[1])
+        else:  # cnn
+            model = self._create_cnn_model(features.shape[1])
+        
+        # Train model
+        model.fit(features, responses, epochs=100, batch_size=32, verbose=0)
+        self.model = model
+        
+        # Evaluate training accuracy
+        predictions = model.predict(features)
+        self.success_rate = np.mean((predictions > 0.5).astype(int) == responses)
+    
+    def _create_lstm_model(self, input_dim: int):
+        """Create LSTM model architecture."""
+        if not self.tf_available:
+            return None
+            
+        model = self.tf.keras.Sequential([
+            self.tf.keras.layers.Reshape((input_dim, 1)),
+            self.tf.keras.layers.LSTM(self.neurons_per_layer, return_sequences=True),
+            self.tf.keras.layers.Dropout(0.2),
+            self.tf.keras.layers.LSTM(self.neurons_per_layer // 2),
+            self.tf.keras.layers.Dropout(0.2),
+            self.tf.keras.layers.Dense(1, activation='sigmoid')
+        ])
+        
+        model.compile(
+            optimizer='adam',
+            loss='binary_crossentropy',
+            metrics=['accuracy']
+        )
+        
+        return model
+    
+    def _create_transformer_model(self, input_dim: int):
+        """Create Transformer model architecture."""
+        if not self.tf_available:
+            return None
+            
+        inputs = self.tf.keras.Input(shape=(input_dim,))
+        
+        # Positional encoding
+        x = self.tf.keras.layers.Dense(self.neurons_per_layer)(inputs)
+        x = self.tf.keras.layers.Reshape((input_dim, self.neurons_per_layer // input_dim))(x)
+        
+        # Multi-head attention
+        attention_output = self.tf.keras.layers.MultiHeadAttention(
+            num_heads=8,
+            key_dim=self.neurons_per_layer // 8
+        )(x, x)
+        
+        # Feed forward
+        x = self.tf.keras.layers.LayerNormalization()(attention_output + x)
+        x = self.tf.keras.layers.Dense(self.neurons_per_layer, activation='relu')(x)
+        x = self.tf.keras.layers.GlobalAveragePooling1D()(x)
+        x = self.tf.keras.layers.Dense(self.neurons_per_layer // 2, activation='relu')(x)
+        outputs = self.tf.keras.layers.Dense(1, activation='sigmoid')(x)
+        
+        model = self.tf.keras.Model(inputs=inputs, outputs=outputs)
+        model.compile(
+            optimizer='adam',
+            loss='binary_crossentropy',
+            metrics=['accuracy']
+        )
+        
+        return model
+    
+    def _create_cnn_model(self, input_dim: int):
+        """Create CNN model architecture."""
+        if not self.tf_available:
+            return None
+            
+        model = self.tf.keras.Sequential([
+            self.tf.keras.layers.Reshape((input_dim, 1)),
+            self.tf.keras.layers.Conv1D(32, 3, activation='relu'),
+            self.tf.keras.layers.MaxPooling1D(2),
+            self.tf.keras.layers.Conv1D(64, 3, activation='relu'),
+            self.tf.keras.layers.MaxPooling1D(2),
+            self.tf.keras.layers.Conv1D(128, 3, activation='relu'),
+            self.tf.keras.layers.GlobalAveragePooling1D(),
+            self.tf.keras.layers.Dense(self.neurons_per_layer, activation='relu'),
+            self.tf.keras.layers.Dropout(0.5),
+            self.tf.keras.layers.Dense(1, activation='sigmoid')
+        ])
+        
+        model.compile(
+            optimizer='adam',
+            loss='binary_crossentropy',
+            metrics=['accuracy']
+        )
+        
+        return model
+
+class ReplayAttack(Attack):
+    """Replay attack simulation."""
+    
+    def __init__(
+        self,
+        replay_type: str = 'exact',  # exact, noisy, or adaptive
+        noise_level: float = 0.05,
+        adaptation_rate: float = 0.1
+    ):
+        """Initialize replay attack.
+        
+        Args:
+            replay_type: Type of replay attack
+            noise_level: Noise level for noisy replay
+            adaptation_rate: Adaptation rate for adaptive replay
+        """
+        super().__init__(f'REPLAY_{replay_type.upper()}')
+        self.replay_type = replay_type
+        self.noise_level = noise_level
+        self.adaptation_rate = adaptation_rate
+        self.database = {}
+    
+    def train(self, challenges: np.ndarray, responses: np.ndarray) -> None:
+        """Build replay database.
+        
+        Args:
+            challenges: Challenge bit vectors
+            responses: Response bits
+        """
+        # Store challenge-response pairs
+        for challenge, response in zip(challenges, responses):
+            key = tuple(challenge)
+            self.database[key] = response
+        
+        # Calculate success rate based on database coverage
+        self.success_rate = len(self.database) / max(len(challenges), 1)
+    
+    def evaluate(self, challenges: np.ndarray, responses: np.ndarray) -> float:
+        """Evaluate replay attack success rate.
+        
+        Args:
+            challenges: Challenge bit vectors
+            responses: True response bits
+            
+        Returns:
+            Attack success rate
+        """
+        if not self.database:
+            raise RuntimeError("Attack not trained. Call train() first.")
+        
+        correct_predictions = 0
+        total_predictions = 0
+        
+        for challenge, true_response in zip(challenges, responses):
+            key = tuple(challenge)
+            
+            if key in self.database:
+                # Direct replay
+                if self.replay_type == 'exact':
+                    predicted_response = self.database[key]
+                elif self.replay_type == 'noisy':
+                    # Add noise to replay
+                    base_response = self.database[key]
+                    if np.random.random() < self.noise_level:
+                        predicted_response = 1 - base_response
+                    else:
+                        predicted_response = base_response
+                else:  # adaptive
+                    # Adaptive replay with learning
+                    predicted_response = self.database[key]
+                    # Update database based on feedback (simplified)
+                    if np.random.random() < self.adaptation_rate:
+                        self.database[key] = true_response
+                
+                if predicted_response == true_response:
+                    correct_predictions += 1
+                total_predictions += 1
+        
+        if total_predictions == 0:
+            return 0.0
+            
+        return correct_predictions / total_predictions
+
+class ModelingAttack(MLAttack):
+    """Advanced modeling attack with feature engineering."""
+    
+    def __init__(
+        self,
+        model_type: str = 'xgboost',  # xgboost, lightgbm, or ensemble
+        feature_order: int = 3,
+        environmental_augmentation: bool = True,
+        military_environment: Optional[MilitaryEnvironment] = None
+    ):
+        """Initialize modeling attack.
+        
+        Args:
+            model_type: Type of ML model
+            feature_order: Maximum order of feature interactions
+            environmental_augmentation: Whether to use environmental data
+            military_environment: Environmental conditions for augmentation
+        """
+        super().__init__('rf', environmental_augmentation, military_environment)
+        self.name = f'MODEL_{model_type.upper()}'
+        self.model_type = model_type
+        self.feature_order = feature_order
+        
+        # Import specialized libraries if available
+        try:
+            if model_type == 'xgboost':
+                import xgboost as xgb
+                self.xgb = xgb
+                self.specialized_lib = True
+            elif model_type == 'lightgbm':
+                import lightgbm as lgb
+                self.lgb = lgb
+                self.specialized_lib = True
+            else:
+                self.specialized_lib = False
+        except ImportError:
+            self.specialized_lib = False
+            print(f"Warning: {model_type} not available. Using RandomForest instead.")
+    
+    def _prepare_features(self, challenges: np.ndarray) -> np.ndarray:
+        """Prepare advanced feature set.
+        
+        Args:
+            challenges: Challenge bit vectors
+            
+        Returns:
+            Feature matrix
+        """
+        features = super()._prepare_features(challenges)
+        
+        # Add higher-order interactions
+        if self.feature_order > 2:
+            n_challenges = challenges.shape[1]
+            
+            # Third-order interactions (selective)
+            third_order_features = []
+            for i in range(min(n_challenges, 10)):  # Limit to first 10 for efficiency
+                for j in range(i + 1, min(n_challenges, 10)):
+                    for k in range(j + 1, min(n_challenges, 10)):
+                        interaction = challenges[:, i] * challenges[:, j] * challenges[:, k]
+                        third_order_features.append(interaction)
+            
+            if third_order_features:
+                third_order_matrix = np.column_stack(third_order_features)
+                features = np.column_stack([features, third_order_matrix])
+        
+        return features
+    
+    def train(self, challenges: np.ndarray, responses: np.ndarray) -> None:
+        """Train specialized model.
+        
+        Args:
+            challenges: Challenge bit vectors
+            responses: Response bits
+        """
+        features = self._prepare_features(challenges)
+        
+        if self.specialized_lib and self.model_type == 'xgboost':
+            self.model = self.xgb.XGBClassifier(
+                n_estimators=200,
+                max_depth=6,
+                learning_rate=0.1,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42
+            )
+        elif self.specialized_lib and self.model_type == 'lightgbm':
+            self.model = self.lgb.LGBMClassifier(
+                n_estimators=200,
+                max_depth=6,
+                learning_rate=0.1,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42
+            )
+        else:
+            # Fall back to ensemble
+            from sklearn.ensemble import VotingClassifier
+            from sklearn.svm import SVC
+            
+            rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+            svm_model = SVC(probability=True, random_state=42)
+            
+            self.model = VotingClassifier(
+                estimators=[('rf', rf_model), ('svm', svm_model)],
+                voting='soft'
+            )
+        
+        # Train model
+        self.model.fit(features, responses)
+        
+        # Evaluate training accuracy
+        predictions = self.model.predict(features)
+        self.success_rate = np.mean(predictions == responses) 

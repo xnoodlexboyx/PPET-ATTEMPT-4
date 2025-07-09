@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PPET (Physical Unclonable Function Emulation and Analysis Tool) is a Python framework for emulating and analyzing Physical Unclonable Functions (PUFs) in defense/security applications. The framework provides accurate PUF models, security analysis tools, and practical use cases for PUF-based authentication and secure communication.
+PPET (Physical Unclonable Function Emulation and Analysis Tool) is a Python framework for emulating and analyzing Physical Unclonable Functions (PUFs) in high-security applications. The framework provides accurate PUF models, security analysis tools, and practical use cases for PUF-based authentication and secure communication in harsh environments.
 
 ## Common Development Commands
 
@@ -47,12 +47,12 @@ The framework is built around a modular architecture with clear separation of co
 
 - **ppet/core/**: Core PUF simulation and analysis functionality
   - `puf_emulator.py`: Base PUF class and specific implementations (ArbiterPUF, SRAMPUF, RingOscillatorPUF)
-  - `analysis.py`: PUF analysis and visualization tools with military-grade capabilities
+  - `analysis.py`: PUF analysis and visualization tools with harsh environment and high-security capabilities
   - `analyzer.py`: General analysis utilities
-  - `military_stressors.py`: Military environment modeling (temperature, EMI, aging)
+  - `military_stressors.py`: Harsh environment modeling (temperature, EMI, aging)
   - `threat_simulator.py`: Attack simulation capabilities
 
-- **ppet/use_cases/**: Defense-specific application scenarios
+- **ppet/use_cases/**: High-security application scenarios
   - `secure_communication.py`: Secure communication protocols
   - `drone_authentication.py`: Drone authentication systems
 
@@ -137,7 +137,7 @@ The framework supports YAML/JSON configuration files for:
 
 3. **Extensibility**: New PUF types should inherit from the base `PUF` class and implement the required methods (`generate_crps`, `evaluate`).
 
-4. **Military Standards**: Analysis tools are designed to meet military reliability and security assessment requirements.
+4. **Industrial Standards**: Analysis tools are designed to meet industrial reliability and security assessment requirements.
 
 5. **Reproducibility**: All simulations support seeding for reproducible results.
 
