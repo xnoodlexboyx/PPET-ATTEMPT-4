@@ -681,4 +681,328 @@ class PUFAnalyzer:
                                                f"{save_dir}/bit_aliasing.{'html' if use_plotly else 'png'}", 
                                                use_plotly)
         
-        return results 
+        return results
+
+    def plot_3d_threat_landscape(self, pufs: List[PUF], attacks: List, 
+                                 environment: MilitaryEnvironment, 
+                                 save_path: Optional[str] = None) -> None:
+        """Create 3D threat landscape visualization showing attack success vs conditions.
+        
+        Args:
+            pufs: List of PUF instances to analyze
+            attacks: List of attack instances to evaluate
+            environment: Military environment profile
+            save_path: Optional path to save the plot
+        """
+        # Create parameter grid for 3D visualization
+        temp_range = np.linspace(-40, 85, 10)
+        emi_range = np.linspace(0.0, 1.0, 10)
+        attack_success_rates = np.zeros((len(attacks), len(temp_range), len(emi_range)))
+        
+        # Test each attack under different conditions
+        for attack_idx, attack in enumerate(attacks):
+            for i, temp in enumerate(temp_range):
+                for j, emi in enumerate(emi_range):
+                    # Update PUF environmental conditions
+                    for puf in pufs:
+                        puf.environmental_stressors.update({
+                            'temperature': temp,
+                            'em_noise': emi,
+                            'voltage': 1.2,
+                            'aging_factor': 1.0
+                        })
+                    
+                    # Generate test data
+                    test_challenges = np.random.randint(0, 2, size=(100, getattr(pufs[0], 'n_stages', 64)))
+                    test_responses = []
+                    for puf in pufs:
+                        if hasattr(puf, 'generate_responses'):
+                            resp = puf.generate_responses(test_challenges)
+                        else:
+                            resp = puf.generate_crps(len(test_challenges))
+                            if isinstance(resp, tuple):
+                                resp = resp[1]
+                        test_responses.append(resp)
+                    
+                    # Use first PUF's responses as ground truth
+                    true_responses = test_responses[0]
+                    
+                    # Train and evaluate attack
+                    try:
+                        attack.train(test_challenges, true_responses)
+                        success_rate = attack.evaluate(test_challenges, true_responses)
+                        attack_success_rates[attack_idx, i, j] = success_rate
+                    except Exception as e:
+                        attack_success_rates[attack_idx, i, j] = 0.0
+        
+        # Create 3D surface plot
+        fig = go.Figure()
+        
+        # Add surface for each attack
+        for attack_idx, attack in enumerate(attacks):
+            T, E = np.meshgrid(temp_range, emi_range)
+            fig.add_trace(go.Surface(
+                x=T,
+                y=E,
+                z=attack_success_rates[attack_idx].T,
+                name=attack.name,
+                colorscale='Viridis',
+                opacity=0.8
+            ))
+        
+        fig.update_layout(
+            title='3D Threat Landscape: Attack Success vs Environmental Conditions',
+            scene=dict(
+                xaxis_title='Temperature (°C)',
+                yaxis_title='EMI Level',
+                zaxis_title='Attack Success Rate',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))
+            ),
+            width=1000,
+            height=800
+        )
+        
+        if save_path:
+            fig.write_html(save_path)
+        fig.show()
+
+    def plot_3d_puf_response_analysis(self, pufs: List[PUF], num_crps: int = 500,
+                                     save_path: Optional[str] = None) -> None:
+        """Create 3D visualization of PUF response analysis (challenge vs response vs reliability).
+        
+        Args:
+            pufs: List of PUF instances to analyze
+            num_crps: Number of CRPs to analyze
+            save_path: Optional path to save the plot
+        """
+        # Generate challenge-response data
+        challenges = np.random.randint(0, 2, size=(num_crps, getattr(pufs[0], 'n_stages', 64)))
+        
+        # Calculate challenge complexity (Hamming weight)
+        challenge_complexity = np.sum(challenges, axis=1)
+        
+        # Calculate response consistency across PUFs
+        all_responses = []
+        for puf in pufs:
+            if hasattr(puf, 'generate_responses'):
+                responses = puf.generate_responses(challenges)
+            else:
+                responses = puf.generate_crps(len(challenges))
+                if isinstance(responses, tuple):
+                    responses = responses[1]
+            all_responses.append(responses)
+        
+        all_responses = np.array(all_responses)
+        
+        # Calculate reliability (consistency across PUFs)
+        reliability = np.mean(all_responses == all_responses[0], axis=0)
+        
+        # Calculate average response
+        avg_response = np.mean(all_responses, axis=0)
+        
+        # Create 3D scatter plot
+        fig = go.Figure()
+        
+        # Color by reliability
+        fig.add_trace(go.Scatter3d(
+            x=challenge_complexity,
+            y=avg_response,
+            z=reliability,
+            mode='markers',
+            marker=dict(
+                size=3,
+                color=reliability,
+                colorscale='RdYlBu',
+                showscale=True,
+                colorbar=dict(title='Reliability'),
+                opacity=0.8
+            ),
+            name='CRP Analysis'
+        ))
+        
+        fig.update_layout(
+            title='3D PUF Response Analysis: Challenge Complexity vs Response vs Reliability',
+            scene=dict(
+                xaxis_title='Challenge Complexity (Hamming Weight)',
+                yaxis_title='Average Response',
+                zaxis_title='Reliability',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))
+            ),
+            width=1000,
+            height=800
+        )
+        
+        if save_path:
+            fig.write_html(save_path)
+        fig.show()
+
+    def plot_3d_environmental_stress_impact(self, puf: PUF, environment: MilitaryEnvironment,
+                                          save_path: Optional[str] = None) -> None:
+        """Create 3D visualization of environmental stress impact on PUF responses.
+        
+        Args:
+            puf: PUF instance to analyze
+            environment: Military environment profile
+            save_path: Optional path to save the plot
+        """
+        # Set up military stressors
+        stressor = MilitaryStressors(environment=environment)
+        
+        # Generate time points and environmental conditions
+        time_points = np.linspace(0, 1000, 50)  # 50 time points over 1000 hours
+        
+        # Test challenge
+        test_challenge = np.random.randint(0, 2, size=getattr(puf, 'n_stages', 64))
+        
+        # Collect data
+        times = []
+        temperatures = []
+        emi_levels = []
+        response_changes = []
+        
+        # Get baseline response
+        baseline_response = puf.evaluate(test_challenge) if hasattr(puf, 'evaluate') else 0
+        
+        for time in time_points:
+            stressors = stressor.get_all_stressors(time)
+            
+            # Update PUF conditions
+            puf.environmental_stressors.update({
+                'temperature': stressors['temperature'],
+                'em_noise': stressors['em_noise'],
+                'aging_factor': stressors['aging_factor'],
+                'voltage': 1.2
+            })
+            
+            # Get response under stress
+            current_response = puf.evaluate(test_challenge) if hasattr(puf, 'evaluate') else 0
+            
+            times.append(time)
+            temperatures.append(stressors['temperature'])
+            emi_levels.append(stressors['em_noise'])
+            response_changes.append(abs(current_response - baseline_response))
+        
+        # Create 3D scatter plot
+        fig = go.Figure()
+        
+        # Color by mission time
+        fig.add_trace(go.Scatter3d(
+            x=temperatures,
+            y=emi_levels,
+            z=times,
+            mode='markers',
+            marker=dict(
+                size=5,
+                color=response_changes,
+                colorscale='Reds',
+                showscale=True,
+                colorbar=dict(title='Response Change'),
+                opacity=0.8
+            ),
+            name='Environmental Impact'
+        ))
+        
+        fig.update_layout(
+            title=f'3D Environmental Stress Impact - {environment.value.upper()}',
+            scene=dict(
+                xaxis_title='Temperature (°C)',
+                yaxis_title='EMI Level',
+                zaxis_title='Mission Time (hours)',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))
+            ),
+            width=1000,
+            height=800
+        )
+        
+        if save_path:
+            fig.write_html(save_path)
+        fig.show()
+
+    def plot_3d_multi_attack_comparison(self, pufs: List[PUF], attacks: List,
+                                       save_path: Optional[str] = None) -> None:
+        """Create 3D visualization comparing multiple attack scenarios.
+        
+        Args:
+            pufs: List of PUF instances to analyze
+            attacks: List of attack instances to compare
+            save_path: Optional path to save the plot
+        """
+        # Generate test data
+        num_challenges = 200
+        test_challenges = np.random.randint(0, 2, size=(num_challenges, getattr(pufs[0], 'n_stages', 64)))
+        
+        # Get ground truth responses
+        true_responses = []
+        for puf in pufs:
+            if hasattr(puf, 'generate_responses'):
+                resp = puf.generate_responses(test_challenges)
+            else:
+                resp = puf.generate_crps(len(test_challenges))
+                if isinstance(resp, tuple):
+                    resp = resp[1]
+            true_responses.append(resp)
+        
+        # Use first PUF as reference
+        reference_responses = true_responses[0]
+        
+        # Evaluate each attack
+        attack_names = []
+        success_rates = []
+        training_sizes = []
+        confidence_scores = []
+        
+        for attack in attacks:
+            try:
+                # Train attack
+                attack.train(test_challenges, reference_responses)
+                
+                # Evaluate attack
+                success_rate = attack.evaluate(test_challenges, reference_responses)
+                
+                attack_names.append(attack.name)
+                success_rates.append(success_rate)
+                training_sizes.append(len(test_challenges))
+                confidence_scores.append(success_rate)  # Use success rate as confidence proxy
+                
+            except Exception as e:
+                print(f"Error evaluating attack {attack.name}: {e}")
+                continue
+        
+        # Create 3D scatter plot
+        fig = go.Figure()
+        
+        # Add scatter plot for each attack
+        for i, name in enumerate(attack_names):
+            fig.add_trace(go.Scatter3d(
+                x=[training_sizes[i]],
+                y=[success_rates[i]],
+                z=[confidence_scores[i]],
+                mode='markers+text',
+                marker=dict(
+                    size=10,
+                    color=success_rates[i],
+                    colorscale='RdYlBu_r',
+                    showscale=True if i == 0 else False,
+                    colorbar=dict(title='Success Rate') if i == 0 else None,
+                    opacity=0.8
+                ),
+                text=[name],
+                textposition="top center",
+                name=name
+            ))
+        
+        fig.update_layout(
+            title='3D Multi-Attack Comparison: Training Size vs Success Rate vs Confidence',
+            scene=dict(
+                xaxis_title='Training Size',
+                yaxis_title='Success Rate',
+                zaxis_title='Confidence Score',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))
+            ),
+            width=1000,
+            height=800
+        )
+        
+        if save_path:
+            fig.write_html(save_path)
+        fig.show() 

@@ -1,0 +1,8 @@
+Collecting plotly
+  Using cached plotly-6.2.0-py3-none-any.whl (9.6 MB)
+Collecting narwhals>=1.15.1
+  Downloading narwhals-1.46.0-py3-none-any.whl (373 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 373.4/373.4 kB 3.2 MB/s eta 0:00:00
+Requirement already satisfied: packaging in /home/viceroy/Documents/PPET ATTEMPT 4/venv/lib/python3.11/site-packages (from plotly) (25.0)
+Installing collected packages: narwhals, plotly
+Successfully installed narwhals-1.46.0 plotly-6.2.0

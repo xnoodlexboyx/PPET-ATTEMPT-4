@@ -102,11 +102,24 @@ The `PUFAnalyzer` class provides comprehensive analysis with multiple visualizat
   - Interactive heatmaps and scatter plots
   - HTML output for web-based reporting
 
+#### Advanced 3D Visualization Functions
+- **3D Threat Landscape**: `plot_3d_threat_landscape()` - Interactive 3D surface plots showing attack success rates vs environmental conditions
+- **3D PUF Response Analysis**: `plot_3d_puf_response_analysis()` - Challenge complexity vs response vs reliability visualization
+- **3D Environmental Stress Impact**: `plot_3d_environmental_stress_impact()` - Temperature/EMI/time correlation analysis
+- **3D Multi-Attack Comparison**: `plot_3d_multi_attack_comparison()` - Comparative attack effectiveness visualization
+
 #### Comprehensive Reporting
 - `generate_comprehensive_report()`: Automated generation of all analysis metrics and visualizations
 - Support for both Matplotlib (PNG) and Plotly (HTML) output formats
 - Batch processing of multiple PUF instances
 - Military-grade metrics and assessment
+
+#### Threat Assessment Module
+- `ThreatAssessmentReportGenerator`: Complete defense procurement report generation
+- Automated risk assessment and classification
+- Defense-specific countermeasure recommendations
+- Executive summary generation for decision makers
+- HTML and JSON report formats
 
 ## Configuration
 
@@ -175,9 +188,60 @@ aliasing_data = analyzer.analyze_bit_aliasing(pufs, num_crps=1000)
 analyzer.plot_bit_aliasing_analysis(aliasing_data, use_plotly=False)
 ```
 
-### Comprehensive Analysis Example
+### Advanced Examples
+
+#### Comprehensive Analysis Example
 See `examples/comprehensive_analysis_example.py` for a complete demonstration of all analysis capabilities including:
 - Uniqueness analysis with multiple visualization types
 - Bit-aliasing analysis with heatmaps and bar graphs
 - Environmental stress testing
 - Comprehensive report generation
+
+#### 3D Defense Visualization Example
+See `examples/defense_3d_visualization_example.py` for defense-specific 3D visualizations including:
+- 3D threat landscape analysis for multiple attack types
+- Interactive environmental stress impact visualization
+- Multi-attack comparison with 3D scatter plots
+- Satellite communication stress testing
+- Battlefield IoT device analysis
+- Drone swarm authentication analysis
+
+#### Threat Assessment Example
+See `examples/threat_assessment_example.py` for complete defense procurement reporting including:
+- Ground mobile system assessment
+- Aircraft system assessment  
+- Space vehicle system assessment
+- Naval system assessment
+- Comparative analysis across environments
+- Executive summary generation
+
+### Defense Use Case Examples
+
+#### Satellite Communication Analysis
+```python
+from ppet.core.threat_assessment import ThreatAssessmentReportGenerator
+from ppet.core.military_stressors import MilitaryEnvironment
+
+# Create space-hardened PUFs
+pufs = [ArbiterPUF(n_stages=256, seed=i) for i in range(8)]
+
+# Generate comprehensive threat assessment
+report_gen = ThreatAssessmentReportGenerator(classification_level="TOP_SECRET")
+report_data = report_gen.generate_defense_procurement_report(
+    pufs=pufs,
+    environment=MilitaryEnvironment.SPACE_VEHICLE,
+    use_cases=["Satellite Authentication", "Secure Telemetry", "Command Authorization"],
+    output_dir="space_vehicle_threat_assessment"
+)
+```
+
+#### Battlefield IoT Device Analysis
+```python
+# Create IoT-optimized PUFs
+iot_pufs = [ArbiterPUF(n_stages=64, seed=i) for i in range(10)]
+
+# Analyze uniqueness and 3D response patterns
+analyzer = PUFAnalyzer(iot_pufs[0])
+uniqueness_data = analyzer.analyze_uniqueness(iot_pufs)
+analyzer.plot_3d_puf_response_analysis(iot_pufs, save_path="iot_3d_analysis.html")
+```

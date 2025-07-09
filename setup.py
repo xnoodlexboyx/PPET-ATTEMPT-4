@@ -36,6 +36,7 @@ setup(
         "pandas>=1.3.0",
         "pyyaml>=5.4.0",
         "pytest>=6.0.0",
+        "plotly>=5.0.0",
     ],
     extras_require={
         "dev": [
