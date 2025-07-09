@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: ppet
+Version: 0.1.0
+Summary: Physical Unclonable Function Emulation and Analysis Tool
+Author: PPET Team
+Requires-Python: >=3.8
+Provides-Extra: dev
