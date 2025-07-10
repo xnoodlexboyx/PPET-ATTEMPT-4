@@ -243,6 +243,17 @@ puf_params:
   challenge_length: 64
   environmental_sensitivity: true
   aging_enabled: true
+  # Environmental parameter ranges (validated at initialization)
+  temperature_range: [-65.0, 125.0]  # °C, military approximation
+  voltage_range: [0.8, 1.4]          # V, military approximation
+  em_noise_range: [0.0, 2.0]         # normalized units
+  
+# Calibrated sensitivity parameters (aligned with documentation)
+environmental_sensitivity:
+  temperature: 0.00005  # per °C
+  voltage: 0.05         # per V²
+  aging_alpha: 0.1      # maximum aging factor
+  aging_tau: 8760.0     # hours (1 year time constant)
 
 security_analysis:
   ml_attack_models: ["rf", "mlp"]
@@ -293,21 +304,22 @@ logging:
 
 ## Military Standards Compliance
 
-PPET implements models based on:
+PPET implements models based on military approximations:
 
-1. **MIL-STD-810H**
-   - Environmental Engineering Considerations
-   - Temperature, Humidity, Shock, Vibration
-   - Altitude, Solar Radiation, Salt Fog
+1. **Environmental Parameters**
+   - Temperature cycling and extreme conditions
+   - Voltage tolerance ranges
+   - Electromagnetic interference modeling
+   - Aging and degradation effects
 
-2. **MIL-STD-461G**
-   - Electromagnetic Interference
-   - Conducted Emissions
-   - Radiated Susceptibility
-   - Transient Susceptibility
+2. **EMI Modeling**
+   - Conducted and radiated susceptibility
+   - Frequency-dependent interference
+   - Pulse characteristics and timing
+   - Environment-specific profiles
 
-3. **MIL-STD-883K**
-   - Microcircuit Test Methods
-   - Temperature Cycling
-   - Mechanical Shock
-   - Particle Impact Noise 
+3. **Stress Testing**
+   - Temperature cycling approximations
+   - Mechanical stress modeling
+   - Long-term reliability assessment
+   - Mission-critical validation 

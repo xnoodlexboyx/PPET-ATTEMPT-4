@@ -4,9 +4,9 @@ This module provides comprehensive models for simulating extreme environmental
 conditions and their effects on PUF behavior in harsh deployment scenarios.
 
 References:
-    - MIL-STD-810H: Environmental Engineering Considerations
-    - MIL-STD-461G: Electromagnetic Interference
-    - MIL-STD-883K: Microcircuit Test Methods
+    - Military approximations for environmental engineering considerations
+    - Military approximations for electromagnetic interference
+    - Military approximations for microcircuit test methods
 """
 
 from typing import Dict, Optional, Union, List
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 class MilitaryEnvironment(Enum):
-    """Harsh environment profiles based on MIL-STD-810H."""
+    """Harsh environment profiles based on military approximations."""
     GROUND_MOBILE = "ground_mobile"
     AIRCRAFT_INTERNAL = "aircraft_internal"
     AIRCRAFT_EXTERNAL = "aircraft_external"
@@ -66,7 +66,7 @@ class MilitaryStressors:
         
     def _initialize_profiles(self):
         """Initialize environment-specific profiles."""
-        # Temperature profiles based on MIL-STD-810H
+        # Temperature profiles based on military approximation
         self.temp_profiles = {
             MilitaryEnvironment.GROUND_MOBILE: TemperatureProfile(
                 min_temp=-40.0, max_temp=85.0,
@@ -94,7 +94,7 @@ class MilitaryStressors:
             )
         }
         
-        # EMI profiles based on MIL-STD-461G
+        # EMI profiles based on military approximation
         self.emi_profiles = {
             MilitaryEnvironment.GROUND_MOBILE: EMIProfile(
                 conducted_susceptibility=10.0,
@@ -103,7 +103,41 @@ class MilitaryStressors:
                 pulse_width=1e-6,
                 repetition_rate=1000.0
             ),
-            # ... similar profiles for other environments ...
+            MilitaryEnvironment.AIRCRAFT_INTERNAL: EMIProfile(
+                conducted_susceptibility=5.0,
+                radiated_susceptibility=50.0,
+                frequency_range=(10e3, 40e9),
+                pulse_width=5e-7,
+                repetition_rate=2000.0
+            ),
+            MilitaryEnvironment.AIRCRAFT_EXTERNAL: EMIProfile(
+                conducted_susceptibility=15.0,
+                radiated_susceptibility=500.0,
+                frequency_range=(10e3, 40e9),
+                pulse_width=2e-6,
+                repetition_rate=1500.0
+            ),
+            MilitaryEnvironment.NAVAL_SHELTERED: EMIProfile(
+                conducted_susceptibility=8.0,
+                radiated_susceptibility=100.0,
+                frequency_range=(10e3, 18e9),
+                pulse_width=1.5e-6,
+                repetition_rate=800.0
+            ),
+            MilitaryEnvironment.NAVAL_EXPOSED: EMIProfile(
+                conducted_susceptibility=12.0,
+                radiated_susceptibility=300.0,
+                frequency_range=(10e3, 18e9),
+                pulse_width=2e-6,
+                repetition_rate=1200.0
+            ),
+            MilitaryEnvironment.SPACE_VEHICLE: EMIProfile(
+                conducted_susceptibility=20.0,
+                radiated_susceptibility=1000.0,
+                frequency_range=(10e3, 100e9),
+                pulse_width=1e-7,
+                repetition_rate=5000.0
+            )
         }
         
         self.current_profile = self.temp_profiles[self.environment]
@@ -190,10 +224,17 @@ class MilitaryStressors:
         # Integrate acceleration over time to get cumulative stress
         cumulative_stress = np.trapz(acceleration_factors, time_steps)
 
-        # Map cumulative stress to an aging factor (e.g., 1.0 = no aging)
-        # This model ensures aging is a function of both time and temperature stress
-        base_aging_rate = 1e-3 # Calibrated rate
-        aging_factor = 1.0 + base_aging_rate * cumulative_stress
+        # Map cumulative stress to an aging factor using proper time constant
+        # τ = 8760 hours (1 year) as per documentation
+        tau_aging = 8760.0  # hours, from parameter_validation.md
+        alpha_aging = 0.1   # maximum aging factor from documentation
+        
+        # Use exponential aging model: E_aging(t) = α_aging × (1 - exp(-t/τ))
+        base_aging = alpha_aging * (1.0 - np.exp(-time / tau_aging))
+        
+        # Add temperature-dependent acceleration
+        temp_acceleration = cumulative_stress / (time * len(time_steps)) if time > 0 else 1.0
+        aging_factor = 1.0 + base_aging * temp_acceleration
         
         return aging_factor
     

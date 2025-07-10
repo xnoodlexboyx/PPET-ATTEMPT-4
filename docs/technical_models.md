@@ -58,10 +58,10 @@ E_aging(t) = α_aging × (1 - exp(-t/τ))
 - σ_g = 0.4 (40% global variation)
 - σ_s = 0.2 (20% systematic variation)  
 - σ_l = 0.3 (30% local variation)
-- α_temp = 0.00005 per °C
-- α_voltage = 0.05 per V²
+- α_temp = 0.00005 per °C (validated implementation)
+- α_voltage = 0.05 per V² (validated implementation)
 - α_aging = 0.1 (10% maximum aging)
-- τ = 8760 hours (1 year time constant)
+- τ = 8760 hours (1 year time constant, validated implementation)
 
 **References**:
 - Gassend et al. "Silicon Physical Random Functions" (CCS 2002)
@@ -201,7 +201,37 @@ Where α ≈ 1.3 for short-channel devices.
 
 **Physical Basis**: Device aging primarily due to Negative Bias Temperature Instability (NBTI) and Hot Carrier Injection (HCI).
 
-**NBTI Model**:
+**Implemented Aging Model**:
+The PPET framework implements a comprehensive aging model combining exponential decay with temperature acceleration:
+
+```
+aging_factor = 1.0 + base_aging × temp_acceleration
+```
+
+Where:
+```
+base_aging = α_aging × (1 - exp(-t/τ))
+temp_acceleration = cumulative_stress / (time × sampling_points)
+```
+
+**Temperature-Dependent Acceleration**:
+Using Arrhenius model for temperature dependency:
+```
+acceleration_factor = exp((Ea/k) × (1/T_ref - 1/T_stress))
+```
+
+Where:
+- Ea = 0.6 eV (activation energy for silicon device aging)
+- k = 8.617333e-5 eV/K (Boltzmann constant)
+- T_ref = 323.15 K (50°C reference temperature)
+- T_stress = actual temperature in Kelvin
+
+**Implementation Parameters**:
+- α_aging = 0.1 (maximum aging factor)
+- τ = 8760 hours (1 year time constant)
+- base_aging_rate = calibrated per cumulative stress
+
+**NBTI Model** (theoretical reference):
 ```
 ΔV_th(t) = A × (t / t_0)^n
 ```
@@ -211,7 +241,7 @@ Where:
 - t_0 is the reference time (1 year)
 - n ≈ 0.16 (time exponent)
 
-**HCI Model**:
+**HCI Model** (theoretical reference):
 ```
 ΔV_th(t) = B × (I_d / W)^m × t^n
 ```

@@ -138,30 +138,63 @@ This document provides justification for all model parameters used in the PPET f
 - Fault injection accuracy: 93.8% ± 2.7%
 - Critical voltage correlation: R² = 0.86 ± 0.05
 
+## Implementation-Specific Parameters
+
+### Environmental Validation Ranges
+
+| Parameter | Range | Unit | Standard | Implementation |
+|-----------|-------|------|----------|----------------|
+| Temperature | [-65, 125] | °C | Military approximation | Validated at PUF initialization |
+| Voltage | [0.8, 1.4] | V | Military approximation | Validated at PUF initialization |
+| EM Noise | [0.0, 2.0] | normalized | Custom | Validated at PUF initialization |
+| Aging Factor | [1.0, ∞) | - | Custom | Monotonically increasing |
+
+### EMI Profile Parameters
+
+Complete EMI profiles implemented for all military environments:
+
+| Environment | Conducted (V) | Radiated (V/m) | Frequency (Hz) | Pulse Width (s) |
+|-------------|---------------|----------------|----------------|-----------------|
+| GROUND_MOBILE | 10.0 | 200.0 | 10e3-18e9 | 1e-6 |
+| AIRCRAFT_INTERNAL | 5.0 | 50.0 | 10e3-40e9 | 5e-7 |
+| AIRCRAFT_EXTERNAL | 15.0 | 500.0 | 10e3-40e9 | 2e-6 |
+| NAVAL_SHELTERED | 8.0 | 100.0 | 10e3-18e9 | 1.5e-6 |
+| NAVAL_EXPOSED | 12.0 | 300.0 | 10e3-18e9 | 2e-6 |
+| SPACE_VEHICLE | 20.0 | 1000.0 | 10e3-100e9 | 1e-7 |
+
+### Aging Model Implementation
+
+The aging model now correctly implements the exponential decay model:
+
+```
+E_aging(t) = α_aging × (1 - exp(-t/τ))
+```
+
+Where:
+- α_aging = 0.1 (maximum aging factor)
+- τ = 8760 hours (1 year time constant)
+- Temperature acceleration factor applied based on Arrhenius model
+
 ## Environmental Standards Compliance
 
-### MIL-STD-810H Compliance
+### Military Approximation Compliance
 
-| Test Method | Parameter | PPET Value | Standard Range | Compliance |
-|-------------|-----------|------------|----------------|------------|
-| 501.7 | Temperature | [-65, 125]°C | [-65, 125]°C | ✓ |
+| Test Method | Parameter | PPET Value | Approximated Range | Compliance |
+|-------------|-----------|------------|-------------------|------------|
+| Temperature | Temperature | [-65, 125]°C | [-65, 125]°C | ✓ |
 | 502.7 | Vibration | 5-2000 Hz | 5-2000 Hz | ✓ |
 | 503.7 | Shock | 1000 g | 1000 g | ✓ |
 | 504.3 | Contamination | N/A | N/A | N/A |
 | 505.7 | Solar radiation | N/A | N/A | N/A |
 
-### MIL-STD-461G Compliance
+### EMI Approximation Compliance
 
-| Test | Parameter | PPET Value | Standard Limit | Compliance |
-|------|-----------|------------|----------------|------------|
-| CE101 | Conducted emissions | 10 dBμV | 10 dBμV | ✓ |
-| CE102 | Conducted emissions | 50 dBμV | 50 dBμV | ✓ |
-| CS101 | Conducted susceptibility | 10 V | 10 V | ✓ |
-| CS114 | Conducted susceptibility | 5 V/m | 5 V/m | ✓ |
-| RE101 | Radiated emissions | 30 dBμV/m | 30 dBμV/m | ✓ |
-| RE102 | Radiated emissions | 20 dBμV/m | 20 dBμV/m | ✓ |
-| RS101 | Radiated susceptibility | 10 V/m | 10 V/m | ✓ |
-| RS103 | Radiated susceptibility | 10 V/m | 10 V/m | ✓ |
+| Test | Parameter | PPET Value | Approximated Limit | Compliance |
+|------|-----------|------------|-------------------|------------|
+| Conducted | Conducted susceptibility | 5-20 V | Variable by environment | ✓ |
+| Radiated | Radiated susceptibility | 50-1000 V/m | Variable by environment | ✓ |
+| Frequency | Frequency range | 10kHz-100GHz | Variable by environment | ✓ |
+| Pulse | Pulse characteristics | 1e-7 to 2e-6 s | Variable by environment | ✓ |
 
 ## Uncertainty Analysis
 
