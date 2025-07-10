@@ -64,30 +64,34 @@ class PUF:
                 'aging_factor': mil_stressors['aging_factor']
             })
 
-    def _apply_environmental_effects(self, value: float) -> float:
-        """Apply environmental stressor effects to a value.
-        
-        Based on:
-        - Temperature: Linear effect (±0.1% per °C from 25°C)
-        - Voltage: Quadratic effect around nominal
-        - EM noise: Additive Gaussian noise
-        - Aging: Multiplicative degradation
+    def _apply_environmental_effects(self, value: float, sensitivity_factors: Dict[str, float]) -> float:
         """
-        # Temperature effect with wider range support
-        temp_effect = 1.0 + 0.001 * (self.environmental_stressors['temperature'] - 25.0)
-        
-        # Voltage effect
-        voltage_nominal = 1.2
-        voltage_effect = 1.0 + 0.05 * ((self.environmental_stressors['voltage'] - voltage_nominal) / voltage_nominal) ** 2
-        
-        # Enhanced EM noise model
-        em_noise = np.random.normal(0, self.environmental_stressors['em_noise'] * 0.05)
-        
-        # Apply aging degradation
-        aging_effect = self.environmental_stressors.get('aging_factor', 1.0)
-        
-        # Combine all effects
-        return (value * temp_effect * voltage_effect * aging_effect) + em_noise
+        Apply environmental stressor effects with sensitivity calibration.
+
+        Args:
+            value: The base value to be modified.
+            sensitivity_factors: PUF-specific sensitivities to each stressor.
+                Example: {'temp': 1.0, 'voltage': 1.0, 'aging': 1.0}
+        """
+        # Temperature: Exponential model for more realistic degradation
+        temp_ref = 25.0
+        temp_delta = self.environmental_stressors['temperature'] - temp_ref
+        temp_sensitivity = sensitivity_factors.get('temp', 1.0) * 0.0005  # Calibrated base sensitivity
+        temp_effect = np.exp(temp_sensitivity * temp_delta)
+
+        # Voltage: More pronounced effect near operational limits
+        voltage_ref = 1.2
+        voltage_delta = self.environmental_stressors['voltage'] - voltage_ref
+        voltage_sensitivity = sensitivity_factors.get('voltage', 1.0) * 0.1
+        voltage_effect = 1.0 + voltage_sensitivity * (voltage_delta / voltage_ref)**2
+
+        # Aging: Apply as a direct multiplier
+        aging_factor = self.environmental_stressors.get('aging_factor', 1.0)
+        aging_sensitivity = sensitivity_factors.get('aging', 1.0)
+        aging_effect = 1.0 + (aging_factor - 1.0) * aging_sensitivity
+
+        # Combine effects
+        return value * temp_effect * voltage_effect * aging_effect
 
     def generate_crps(self, num_crps: int) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
         """Generate challenge-response pairs."""
@@ -98,7 +102,8 @@ class ArbiterPUF(PUF):
         self,
         n_stages: int,
         seed: Optional[int] = None,
-        environmental_stressors: Optional[Dict[str, float]] = None
+        environmental_stressors: Optional[Dict[str, float]] = None,
+        military_environment: Optional[MilitaryEnvironment] = None
     ):
         """Initialize Arbiter PUF.
         
@@ -106,6 +111,7 @@ class ArbiterPUF(PUF):
             n_stages: Number of stages in the arbiter chain
             seed: Random seed for reproducibility
             environmental_stressors: Environmental conditions
+            military_environment: Optional military environment profile
         
         Mathematical Model:
             The delay difference for an n-stage arbiter PUF is:
@@ -115,7 +121,7 @@ class ArbiterPUF(PUF):
             Δd_i,path = G + S_i + L_i,path + E_i,path(t)
             
             G ~ N(0, 0.4²): Global process variation
-            S_i ~ N(0, 0.2²): Systematic variation  
+            S_i ~ N(0, 0.2²): Systematic variation
             L_i,path ~ N(0, 0.3²): Local random variation
             E_i,path(t): Environmental effects
             
@@ -124,58 +130,38 @@ class ArbiterPUF(PUF):
             - Majzoobi et al. "Testing Techniques for Hardware Security" (ITC 2008)
             - Lim et al. "Extracting Secret Keys from Integrated Circuits" (IEEE TC 2005)
         """
-        super().__init__(seed, environmental_stressors)
+        super().__init__(
+            seed=seed,
+            environmental_stressors=environmental_stressors,
+            military_environment=military_environment
+        )
         self.n_stages = n_stages
         
+        # Ensure non-negative noise
+        if self.environmental_stressors['em_noise'] < 0:
+            self.environmental_stressors['em_noise'] = 0
+
         # Initialize delay parameters based on manufacturing variations
-        # Using hierarchical variation model: global + local variations
-        self.global_variation = np.random.normal(0, 0.4)  # 40% global variation
-        
+        # Using hierarchical variation model: global + systematic + local variations
+        self.global_variation = np.random.normal(0, 0.5)
+
         # Generate systematic variations (position-dependent)
         position = np.linspace(-1, 1, n_stages)
-        gradient = np.random.normal(0, 0.2)  # 20% gradient variation
-        self.systematic_variation = gradient * position  # Linear gradient across stages
-        
+        gradient = np.random.normal(0, 0.3)
+        self.systematic_variation = gradient * position
+
         # Generate local variations for each stage and path
-        # Increased variation and ensured independence between paths
-        self.local_variations_top = np.random.normal(0, 0.3, size=n_stages)  # 30% local variation
-        self.local_variations_bottom = np.random.normal(0, 0.3, size=n_stages)  # 30% local variation
-        
+        self.local_variations_top = np.random.normal(0, 0.4, size=n_stages)
+        self.local_variations_bottom = np.random.normal(0, 0.4, size=n_stages)
+
         # Generate arbiter bias
-        self.arbiter_bias = np.random.normal(0, 0.15)  # 15% arbiter bias
-        
+        self.arbiter_bias = np.random.normal(0, 0.2)
+
         # Generate stage-specific environmental sensitivities
-        # Ensure some stages are more sensitive than others
-        base_sensitivities = np.random.normal(1.0, 0.2, size=n_stages)  # ±20% variation in base sensitivity
+        base_sensitivities = abs(np.random.normal(1.0, 0.3, size=n_stages))
         self.temp_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=n_stages)
         self.voltage_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=n_stages)
         self.noise_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=n_stages)
-
-    def _apply_stage_environmental_effects(self, stage_idx: int, value: float) -> float:
-        """Apply environmental effects to a specific stage.
-        
-        Different stages have slightly different sensitivities to environmental conditions.
-        This models the physical reality that manufacturing variations affect not just
-        the delays but also how sensitive each stage is to environmental conditions.
-        """
-        # Base environmental effects (further reduced sensitivity)
-        temp_effect = 1.0 + 0.00005 * (self.environmental_stressors['temperature'] - 25.0)  # Reduced from 0.0001
-        voltage_nominal = 1.2
-        voltage_ratio = self.environmental_stressors['voltage'] / voltage_nominal
-        voltage_effect = 1.0 + 0.002 * ((voltage_ratio - 1) ** 2)  # Reduced from 0.005
-        
-        # Apply stage-specific sensitivities
-        temp_effect = temp_effect ** self.temp_sensitivities[stage_idx]
-        voltage_effect = voltage_effect ** self.voltage_sensitivities[stage_idx]
-        
-        # Apply effects
-        value *= temp_effect * voltage_effect
-        
-        # Add noise with stage-specific sensitivity
-        noise_amplitude = 0.002 * self.noise_sensitivities[stage_idx]  # Reduced from 0.005
-        noise = np.random.normal(0, self.environmental_stressors['em_noise'] * noise_amplitude)
-        
-        return value + noise
 
     def evaluate(self, challenge: np.ndarray) -> int:
         """Evaluate PUF response for a given challenge.
@@ -196,13 +182,18 @@ class ArbiterPUF(PUF):
         
         # Accumulate delays through stages with switching
         for i in range(self.n_stages):
-            # Calculate base delays for both paths
+            # 1. Calculate base delays
             base_delay_top = 1.0 + self.global_variation + self.systematic_variation[i] + self.local_variations_top[i]
             base_delay_bottom = 1.0 + self.global_variation - self.systematic_variation[i] + self.local_variations_bottom[i]
-            
-            # Apply environmental effects to both paths
-            delay_top = self._apply_stage_environmental_effects(i, base_delay_top)
-            delay_bottom = self._apply_stage_environmental_effects(i, base_delay_bottom)
+
+            # 2. Apply deterministic environmental effects
+            delay_top = self._apply_environmental_effects(base_delay_top, {'temp': self.temp_sensitivities[i], 'voltage': self.voltage_sensitivities[i], 'aging': 1.0})
+            delay_bottom = self._apply_environmental_effects(base_delay_bottom, {'temp': self.temp_sensitivities[i], 'voltage': self.voltage_sensitivities[i], 'aging': 1.0})
+
+            # 3. Add stochastic noise
+            noise_scale = self.environmental_stressors['em_noise'] * self.noise_sensitivities[i] * 0.01
+            delay_top += np.random.normal(0, noise_scale)
+            delay_bottom += np.random.normal(0, noise_scale)
             
             # Calculate effective delays with non-linear path interactions
             if challenge[i] == 0:
@@ -222,7 +213,9 @@ class ArbiterPUF(PUF):
             delay_diff += effective_delay
         
         # Add arbiter bias with environmental effects
-        final_bias = self._apply_stage_environmental_effects(self.n_stages - 1, self.arbiter_bias)
+        final_bias = self._apply_environmental_effects(self.arbiter_bias, {'temp': self.temp_sensitivities[-1], 'voltage': self.voltage_sensitivities[-1], 'aging': 1.0})
+        noise_scale = self.environmental_stressors['em_noise'] * self.noise_sensitivities[-1] * 0.01
+        final_bias += np.random.normal(0, noise_scale)
         delay_diff += final_bias
         
         return 1 if delay_diff > 0 else 0
@@ -262,7 +255,8 @@ class SRAMPUF(PUF):
         rows: int,
         columns: int,
         seed: Optional[int] = None,
-        environmental_stressors: Optional[Dict[str, float]] = None
+        environmental_stressors: Optional[Dict[str, float]] = None,
+        military_environment: Optional[MilitaryEnvironment] = None
     ):
         """Initialize SRAM PUF.
         
@@ -271,19 +265,28 @@ class SRAMPUF(PUF):
             columns: Number of SRAM columns
             seed: Random seed for reproducibility
             environmental_stressors: Environmental conditions
+            military_environment: Optional military environment profile
             
         References:
             - Holcomb et al. "Initial SRAM State as a Source of Randomness" (CHES 2007)
             - Guajardo et al. "FPGA Intrinsic PUFs and Their Use" (CHES 2007)
         """
-        super().__init__(seed, environmental_stressors)
+        super().__init__(
+            seed=seed,
+            environmental_stressors=environmental_stressors,
+            military_environment=military_environment
+        )
         self.rows = rows
         self.columns = columns
         
-        # Model transistor mismatch parameters
-        # Reduced mismatch variance for better reliability
-        self.vth_mismatch = np.random.normal(0, 0.05, size=(rows, columns, 2))  # Reduced from 0.1
-        self.beta_mismatch = np.random.normal(1, 0.025, size=(rows, columns, 2))  # Reduced from 0.05
+        self.vth_mismatch = np.random.normal(0, 0.05, size=(rows, columns, 2))
+        self.beta_mismatch = np.random.normal(1, 0.025, size=(rows, columns, 2))
+
+        # Generate cell-specific environmental sensitivities
+        base_sensitivities = abs(np.random.normal(1.0, 0.2, size=(rows, columns)))
+        self.temp_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=(rows, columns))
+        self.voltage_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=(rows, columns))
+        self.noise_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=(rows, columns))
 
     def generate_startup_state(self) -> np.ndarray:
         """Generate SRAM startup state based on transistor characteristics.
@@ -294,23 +297,39 @@ class SRAMPUF(PUF):
         - Temperature and voltage dependence
         - Noise effects
         """
-        # Temperature effect on threshold voltage (reduced sensitivity)
-        temp_effect = 0.0005 * (self.environmental_stressors['temperature'] - 25.0)  # Reduced from 0.001
-        vth_effective = self.vth_mismatch + temp_effect
+        # Apply environmental effects to transistor parameters
+        # This is a simplified model of how temp/voltage affect transistor physics
         
-        # Voltage effect on current (reduced sensitivity)
-        voltage_nominal = 1.2
-        voltage_ratio = self.environmental_stressors['voltage'] / voltage_nominal
-        beta_effective = self.beta_mismatch * voltage_ratio
-        
+        # Temperature effect on threshold voltage (Vth decreases with temp)
+        temp_ref = 25.0
+        temp_delta = self.environmental_stressors['temperature'] - temp_ref
+        temp_sensitivity = self.temp_sensitivities * -0.0008 # Vth sensitivity to temp
+        vth_temp_effect = temp_delta * temp_sensitivity
+        vth_effective = self.vth_mismatch + vth_temp_effect[..., np.newaxis]
+
+        # Voltage effect on current factor (beta is affected by Vdd)
+        voltage_ref = 1.2
+        voltage_delta = self.environmental_stressors['voltage'] - voltage_ref
+        voltage_sensitivity = self.voltage_sensitivities * 0.5 # Beta sensitivity to voltage
+        beta_voltage_effect = 1.0 + voltage_delta / voltage_ref * voltage_sensitivity
+        beta_effective = self.beta_mismatch * beta_voltage_effect[..., np.newaxis]
+
+        # Aging effect (increases Vth mismatch over time)
+        aging_factor = self.environmental_stressors.get('aging_factor', 1.0)
+        aging_effect = (aging_factor - 1.0) * 0.01 # Map aging to Vth shift
+        vth_effective += aging_effect
+
         # Calculate strength ratio between transistor pairs
-        strength_ratio = (beta_effective[:,:,0] * (1 - vth_effective[:,:,0])) / \
-                        (beta_effective[:,:,1] * (1 - vth_effective[:,:,1]))
-        
-        # Add noise effect (reduced sensitivity)
-        noise = np.random.normal(0, self.environmental_stressors['em_noise'] * 0.025, size=(self.rows, self.columns))  # Reduced scale
-        strength_ratio += noise
-        
+        # A more robust model considering Vth in the drive current calculation
+        drive_current_0 = beta_effective[:,:,0] * (self.environmental_stressors['voltage'] - vth_effective[:,:,0])**2
+        drive_current_1 = beta_effective[:,:,1] * (self.environmental_stressors['voltage'] - vth_effective[:,:,1])**2
+        strength_ratio = drive_current_0 / drive_current_1
+
+        # Add stochastic noise
+        noise_scale = self.environmental_stressors['em_noise'] * self.noise_sensitivities * 0.02
+        noise = np.random.normal(0, 1.0, size=(self.rows, self.columns)) * noise_scale
+        strength_ratio *= np.exp(noise) # Multiplicative noise on ratio
+
         return (strength_ratio > 1).astype(int)
 
     def generate_crps(self, num_crps: int) -> np.ndarray:
@@ -328,7 +347,8 @@ class RingOscillatorPUF(PUF):
         num_oscillators: int,
         stages_per_oscillator: int = 13,
         seed: Optional[int] = None,
-        environmental_stressors: Optional[Dict[str, float]] = None
+        environmental_stressors: Optional[Dict[str, float]] = None,
+        military_environment: Optional[MilitaryEnvironment] = None
     ):
         """Initialize Ring Oscillator PUF.
         
@@ -337,18 +357,29 @@ class RingOscillatorPUF(PUF):
             stages_per_oscillator: Number of inverter stages per oscillator
             seed: Random seed for reproducibility
             environmental_stressors: Environmental conditions
+            military_environment: Optional military environment profile
             
         References:
             - Suh and Devadas "Physical Unclonable Functions for Device Authentication" (DAC 2007)
             - Maiti and Schaumont "Improved Ring Oscillator PUF" (HOST 2011)
         """
-        super().__init__(seed, environmental_stressors)
+        super().__init__(
+            seed=seed,
+            environmental_stressors=environmental_stressors,
+            military_environment=military_environment
+        )
         self.num_oscillators = num_oscillators
         self.stages_per_oscillator = stages_per_oscillator
         
         # Model oscillator characteristics
         self.base_freq = 100e6  # 100 MHz base frequency
         self.process_variations = self.generate_process_variations()
+
+        # Generate oscillator-specific environmental sensitivities
+        base_sensitivities = abs(np.random.normal(1.0, 0.2, size=num_oscillators))
+        self.temp_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=num_oscillators)
+        self.voltage_sensitivities = base_sensitivities * np.random.normal(1.0, 0.1, size=num_oscillators)
+        self.noise_sensitivities = base_sensitivities * np.random.normal(1.0, 0.05, size=num_oscillators)
 
     def generate_process_variations(self) -> np.ndarray:
         """Generate process variation effects for each oscillator.
@@ -391,22 +422,19 @@ class RingOscillatorPUF(PUF):
         - Noise
         """
         # Base frequency with process variations
-        freq = self.base_freq * (1 + self.process_variations[oscillator_idx])
+        base_freq = self.base_freq * (1 + self.process_variations[oscillator_idx])
         
-        # Temperature effect (reduced sensitivity)
-        temp_effect = 1.0 - 0.0005 * (self.environmental_stressors['temperature'] - 25.0)  # Reduced from 0.001
+        # Apply deterministic environmental effects
+        sensitivity_factors = {
+            'temp': self.temp_sensitivities[oscillator_idx],
+            'voltage': self.voltage_sensitivities[oscillator_idx],
+            'aging': 1.0 # Assuming aging affects ROs similarly
+        }
+        freq = self._apply_environmental_effects(base_freq, sensitivity_factors)
         
-        # Voltage effect (reduced sensitivity)
-        voltage_nominal = 1.2
-        voltage_ratio = self.environmental_stressors['voltage'] / voltage_nominal
-        voltage_effect = voltage_ratio ** 1.5  # Reduced from quadratic
-        
-        # Apply environmental effects
-        freq *= temp_effect * voltage_effect
-        
-        # Add noise (reduced sensitivity)
-        noise = np.random.normal(0, self.environmental_stressors['em_noise'] * 0.025 * freq)  # Reduced scale
-        freq += noise
+        # Add stochastic noise
+        noise_scale = self.environmental_stressors['em_noise'] * self.noise_sensitivities[oscillator_idx] * 0.01 * freq
+        freq += np.random.normal(0, noise_scale)
         
         return freq
 
@@ -438,4 +466,4 @@ class RingOscillatorPUF(PUF):
             ]
         
         responses = np.array([self.evaluate(ch) for ch in challenges])
-        return challenges, responses 
+        return challenges, responses

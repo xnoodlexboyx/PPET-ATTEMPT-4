@@ -156,7 +156,9 @@ class MilitaryStressors:
         else:
             pulse_amplitude = 0.0
             
-        total_emi = base_emi + periodic_component + pulse_amplitude
+        total_emi = base_emi + abs(periodic_component) + pulse_amplitude
+        # Ensure non-negativity at the source
+        total_emi = max(0, total_emi)
         
         return {
             'conducted': total_emi * profile.conducted_susceptibility,
@@ -166,29 +168,34 @@ class MilitaryStressors:
         }
     
     def get_aging_factor(self, time: float) -> float:
-        """Calculate aging degradation factor.
-        
-        Args:
-            time: Mission time in hours
-            
-        Returns:
-            Aging factor (1.0 = no aging, increases with time)
         """
-        # Accelerated aging based on temperature cycling
-        temp = self.get_temperature_stress(time)
+        Calculate a monotonic and cumulative aging degradation factor.
+        """
+        if time <= 0:
+            return 1.0
+
+        # Use a more stable integration approach
+        time_steps = np.linspace(0, time, int(time * 4) + 2) # Increased sampling
+        temps = np.array([self.get_temperature_stress(t) for t in time_steps])
+
+        # Arrhenius model for temperature-dependent degradation
+        k = 8.617333e-5  # Boltzmann constant (eV/K)
+        Ea = 0.6  # Activation energy for silicon device aging (eV)
+        T_ref = 273.15 + 50.0  # Reference temperature (K)
+        T_stress = 273.15 + temps
+
+        # Calculate acceleration factor relative to reference temperature
+        acceleration_factors = np.exp((Ea / k) * (1 / T_ref - 1 / T_stress))
         
-        # Arrhenius acceleration factor
-        k = 8.617333262145e-5  # Boltzmann constant
-        Ea = 0.7  # Activation energy (eV)
-        T_use = 273.15 + 25.0  # Reference temp (K)
-        T_stress = 273.15 + temp  # Stress temp (K)
+        # Integrate acceleration over time to get cumulative stress
+        cumulative_stress = np.trapz(acceleration_factors, time_steps)
+
+        # Map cumulative stress to an aging factor (e.g., 1.0 = no aging)
+        # This model ensures aging is a function of both time and temperature stress
+        base_aging_rate = 1e-3 # Calibrated rate
+        aging_factor = 1.0 + base_aging_rate * cumulative_stress
         
-        acceleration = np.exp((Ea/k) * (1/T_use - 1/T_stress))
-        
-        # Basic aging model
-        base_aging = 1.0 + 0.1 * (time / self.mission_duration)
-        
-        return base_aging * acceleration
+        return aging_factor
     
     def get_all_stressors(self, time: float) -> Dict[str, float]:
         """Get all environmental stressors at given time.

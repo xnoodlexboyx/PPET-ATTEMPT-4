@@ -173,7 +173,11 @@ class MLAttack(Attack):
         """
         if self.model is None:
             raise RuntimeError("Model not trained. Call train() first.")
-        return self.model.predict(challenges)
+        # Augment challenges with environmental features for prediction
+        # Use augmentation_factor=1 as we are not generating new samples, just adding features
+        X_pred, _ = self._augment_data(challenges, np.zeros(len(challenges)), augmentation_factor=1)
+        
+        return self.model.predict(X_pred)
 
 class SideChannelAttack(Attack):
     """Power/timing side-channel attack simulation."""

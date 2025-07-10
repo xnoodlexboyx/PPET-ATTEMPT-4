@@ -215,7 +215,7 @@ protocol = DroneAuthenticationProtocol(
     military_environment=MilitaryEnvironment.AIRCRAFT_EXTERNAL
 )
 
-# Enroll drone with mission parameters
+# Enrolll drone with mission parameters
 drone_id = "military_drone_001"
 location = (37.7749, -122.4194, 1000.0)
 protocol.enroll_drone(drone_id, location)
