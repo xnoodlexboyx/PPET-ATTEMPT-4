@@ -1,0 +1,152 @@
+{
+  "metadata": {
+    "framework": "PPET",
+    "version": "1.0",
+    "timestamp": "2024-07-10",
+    "total_pufs": 12,
+    "total_crps": 78600,
+    "environments_tested": 6
+  },
+  "puf_instances": {
+    "ground_mobile": {
+      "arbiter": {
+        "challenges": 200,
+        "responses": 200,
+        "response_balance": 0.615
+      },
+      "sram": {
+        "responses": 50,
+        "response_balance": 0.4921875
+      },
+      "ro": {
+        "challenges": 100,
+        "responses": 100,
+        "response_balance": 0.53
+      }
+    },
+    "aircraft_internal": {
+      "arbiter": {
+        "challenges": 200,
+        "responses": 200,
+        "response_balance": 0.615
+      },
+      "sram": {
+        "responses": 50,
+        "response_balance": 0.492265625
+      },
+      "ro": {
+        "challenges": 100,
+        "responses": 100,
+        "response_balance": 0.54
+      }
+    },
+    "aircraft_external": {
+      "arbiter": {
+        "challenges": 200,
+        "responses": 200,
+        "response_balance": 0.615
+      },
+      "sram": {
+        "responses": 50,
+        "response_balance": 0.492734375
+      },
+      "ro": {
+        "challenges": 100,
+        "responses": 100,
+        "response_balance": 0.55
+      }
+    },
+    "naval_sheltered": {
+      "arbiter": {
+        "challenges": 200,
+        "responses": 200,
+        "response_balance": 0.615
+      },
+      "sram": {
+        "responses": 50,
+        "response_balance": 0.492109375
+      },
+      "ro": {
+        "challenges": 100,
+        "responses": 100,
+        "response_balance": 0.51
+      }
+    },
+    "naval_exposed": {
+      "arbiter": {
+        "challenges": 200,
+        "responses": 200,
+        "response_balance": 0.615
+      },
+      "sram": {
+        "responses": 50,
+        "response_balance": 0.491875
+      },
+      "ro": {
+        "challenges": 100,
+        "responses": 100,
+        "response_balance": 0.51
+      }
+    },
+    "space_vehicle": {
+      "arbiter": {
+        "challenges": 200,
+        "responses": 200,
+        "response_balance": 0.615
+      },
+      "sram": {
+        "responses": 50,
+        "response_balance": 0.492890625
+      },
+      "ro": {
+        "challenges": 100,
+        "responses": 100,
+        "response_balance": 0.55
+      }
+    }
+  },
+  "analysis_results": {
+    "uniqueness": {
+      "mean_hamming_distance": 0.4487407407407407,
+      "std_hamming_distance": 0.058462983493467686,
+      "total_comparisons": 45
+    },
+    "bit_aliasing": {
+      "mean_bit_frequency": 0.6356666666666666,
+      "std_bit_frequency": 0.16318054077888358,
+      "total_bits_analyzed": 300
+    }
+  },
+  "environmental_data": {
+    "ground_mobile": {
+      "temperature": 85.0,
+      "em_noise": 0.6037337676479824,
+      "aging_factor": 1.0000056922459801
+    },
+    "aircraft_internal": {
+      "temperature": 41.249999999999986,
+      "em_noise": 0.6037337676479824,
+      "aging_factor": 1.000002454992865
+    },
+    "aircraft_external": {
+      "temperature": -10.000000000000007,
+      "em_noise": 0.6037337676479824,
+      "aging_factor": 1.0000387588826762
+    },
+    "naval_sheltered": {
+      "temperature": 65.0,
+      "em_noise": 0.6037337676479824,
+      "aging_factor": 1.0000024896822253
+    },
+    "naval_exposed": {
+      "temperature": 54.999999999999986,
+      "em_noise": 0.6037337676479824,
+      "aging_factor": 1.000001492331188
+    },
+    "space_vehicle": {
+      "temperature": -17.500000000000007,
+      "em_noise": 0.6037337676479824,
+      "aging_factor": 1.000038230805853
+    }
+  }
+}
